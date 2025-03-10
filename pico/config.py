@@ -22,6 +22,13 @@ CHECK_INTERVAL = 60  # Seconds between readings
 RECONNECT_INTERVAL = 10  # Seconds between WiFi reconnection attempts
 
 # Sensor Calibration
-# These values need calibration for your specific moisture sensor
-MOISTURE_MIN_VALUE = 20000  # ADC value when sensor is in water
-MOISTURE_MAX_VALUE = 65000  # ADC value when sensor is in air 
+# Calibrated values for capacitive soil moisture sensor
+MOISTURE_MIN_VALUE = 22249  # ADC value when soil is very wet
+MOISTURE_MAX_VALUE = 40593  # ADC value when soil is very dry
+
+# Moisture interpretation guide:
+# 0-20%:   Very Dry  (around 40593)
+# 20-40%:  Dry       (around 36924) - Watering starts
+# 40-60%:  Moderate  (around 31421)
+# 60-80%:  Moist     (around 25918) - Watering stops
+# 80-100%: Very Wet  (around 22249) 

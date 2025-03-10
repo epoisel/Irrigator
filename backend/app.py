@@ -13,6 +13,16 @@ CORS(app)  # Enable CORS for all routes
 # Database setup
 DB_PATH = os.path.join(os.path.dirname(__file__), 'irrigation.db')
 
+# Watering control constants
+WICKING_WAIT_TIME = 60 * 60  # 60 minutes in seconds
+WATERING_DURATION = 5 * 60   # 5 minutes in seconds
+MAX_DAILY_CYCLES = 4         # Maximum watering cycles per day
+
+# Global state tracking
+last_watering_times = {}     # Track last watering time per device
+daily_cycles = {}            # Track daily watering cycles per device
+last_cycle_reset = {}        # Track when we last reset daily cycles
+
 def init_db():
     """Initialize the database with required tables if they don't exist."""
     conn = sqlite3.connect(DB_PATH)
@@ -45,7 +55,31 @@ def init_db():
         device_id TEXT NOT NULL,
         enabled INTEGER NOT NULL DEFAULT 1,
         low_threshold REAL NOT NULL,
-        high_threshold REAL NOT NULL
+        high_threshold REAL NOT NULL,
+        last_watering TEXT,
+        daily_cycles INTEGER DEFAULT 0,
+        cycles_reset_date TEXT
+    )
+    ''')
+
+    # Create plant_measurements table
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS plant_measurements (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        device_id TEXT NOT NULL,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        height REAL,
+        leaf_count INTEGER,
+        stem_thickness REAL,
+        canopy_width REAL,
+        leaf_color INTEGER,
+        leaf_firmness INTEGER,
+        health_score INTEGER,
+        notes TEXT,
+        fertilized BOOLEAN DEFAULT 0,
+        pruned BOOLEAN DEFAULT 0,
+        ph_reading REAL,
+        FOREIGN KEY(device_id) REFERENCES automation_rules(device_id)
     )
     ''')
     
@@ -57,6 +91,41 @@ init_db()
 
 # Device command queue
 device_commands = {}
+
+def can_water_device(device_id, current_time=None):
+    """Check if it's safe to water the device based on timing rules."""
+    if current_time is None:
+        current_time = time.time()
+    
+    # Initialize tracking for new devices
+    if device_id not in last_watering_times:
+        last_watering_times[device_id] = 0
+    if device_id not in daily_cycles:
+        daily_cycles[device_id] = 0
+    if device_id not in last_cycle_reset:
+        last_cycle_reset[device_id] = current_time
+    
+    # Reset daily cycles at midnight
+    current_date = datetime.datetime.fromtimestamp(current_time).date()
+    last_reset_date = datetime.datetime.fromtimestamp(last_cycle_reset[device_id]).date()
+    
+    if current_date != last_reset_date:
+        daily_cycles[device_id] = 0
+        last_cycle_reset[device_id] = current_time
+    
+    # Check timing rules
+    time_since_last_water = current_time - last_watering_times[device_id]
+    
+    return (time_since_last_water >= WICKING_WAIT_TIME and 
+            daily_cycles[device_id] < MAX_DAILY_CYCLES)
+
+def update_watering_state(device_id, current_time=None):
+    """Update the watering state for a device."""
+    if current_time is None:
+        current_time = time.time()
+    
+    last_watering_times[device_id] = current_time
+    daily_cycles[device_id] += 1
 
 @app.route('/api/sensor-data', methods=['POST'])
 def receive_sensor_data():
@@ -287,12 +356,29 @@ def check_automation_rules(device_id, moisture):
         conn.close()
         
         if rule and rule['enabled']:
+            current_time = time.time()
+            
             if moisture <= rule['low_threshold']:
-                # Moisture too low, turn valve ON
-                control_valve_internal(device_id, 1)
+                # Only water if timing rules allow
+                if can_water_device(device_id, current_time):
+                    # Start watering cycle
+                    control_valve_internal(device_id, 1)
+                    
+                    # Schedule valve turn off after WATERING_DURATION
+                    def turn_off_valve():
+                        time.sleep(WATERING_DURATION)
+                        control_valve_internal(device_id, 0)
+                        update_watering_state(device_id)
+                    
+                    # Start timer thread
+                    timer_thread = threading.Thread(target=turn_off_valve)
+                    timer_thread.daemon = True
+                    timer_thread.start()
+            
             elif moisture >= rule['high_threshold']:
-                # Moisture high enough, turn valve OFF
+                # Turn off valve if moisture is high enough
                 control_valve_internal(device_id, 0)
+    
     except Exception as e:
         print(f"Error in automation: {str(e)}")
 
@@ -353,6 +439,78 @@ def automation_worker():
 # Start automation worker in a background thread
 automation_thread = threading.Thread(target=automation_worker, daemon=True)
 automation_thread.start()
+
+@app.route('/api/measurements', methods=['POST'])
+def add_measurement():
+    """Endpoint to add a new plant measurement."""
+    try:
+        data = request.json
+        if not data or 'device_id' not in data:
+            return jsonify({'error': 'Device ID is required'}), 400
+
+        # Extract data with defaults for optional fields
+        device_id = data['device_id']
+        height = data.get('height')
+        leaf_count = data.get('leaf_count')
+        stem_thickness = data.get('stem_thickness')
+        canopy_width = data.get('canopy_width')
+        leaf_color = data.get('leaf_color')
+        leaf_firmness = data.get('leaf_firmness')
+        health_score = data.get('health_score')
+        notes = data.get('notes')
+        fertilized = data.get('fertilized', False)
+        pruned = data.get('pruned', False)
+        ph_reading = data.get('ph_reading')
+
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            INSERT INTO plant_measurements (
+                device_id, height, leaf_count, stem_thickness, canopy_width,
+                leaf_color, leaf_firmness, health_score, notes,
+                fertilized, pruned, ph_reading
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            device_id, height, leaf_count, stem_thickness, canopy_width,
+            leaf_color, leaf_firmness, health_score, notes,
+            fertilized, pruned, ph_reading
+        ))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({'status': 'success', 'id': cursor.lastrowid}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/measurements/<device_id>', methods=['GET'])
+def get_measurements(device_id):
+    """Endpoint to retrieve plant measurements."""
+    try:
+        days = request.args.get('days', 30, type=int)
+        
+        # Calculate timestamp for filtering
+        timestamp = datetime.datetime.now() - datetime.timedelta(days=days)
+        timestamp_str = timestamp.strftime('%Y-%m-%d %H:%M:%S')
+        
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT * FROM plant_measurements 
+            WHERE device_id = ? AND timestamp >= ?
+            ORDER BY timestamp DESC
+        ''', (device_id, timestamp_str))
+        
+        rows = cursor.fetchall()
+        measurements = [dict(row) for row in rows]
+        conn.close()
+        
+        return jsonify(measurements), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False) 

@@ -8,9 +8,11 @@ import MoistureChart from './components/MoistureChart';
 import ValveHistory from './components/ValveHistory';
 import AutomationSettings from './components/AutomationSettings';
 import TimeRangeSelector from './components/TimeRangeSelector';
+import AutomationControl from './components/AutomationControl';
+import PlantMeasurements from './components/PlantMeasurements';
 
 // Default device ID - this would typically come from user selection or configuration
-const DEFAULT_DEVICE_ID = 'pico_01';
+const DEFAULT_DEVICE_ID = process.env.NEXT_PUBLIC_DEFAULT_DEVICE_ID || 'pico_01';
 
 export default function Home() {
   // State for data
@@ -89,7 +91,7 @@ export default function Home() {
   };
   
   return (
-    <div>
+    <div className="space-y-8">
       {error && (
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
           <p>{error}</p>
@@ -101,7 +103,7 @@ export default function Home() {
         onSelectDays={setSelectedDays} 
       />
       
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <MoistureCard 
           moistureData={currentMoisture} 
           isLoading={isLoadingMoisture} 
@@ -128,6 +130,9 @@ export default function Home() {
           deviceId={DEFAULT_DEVICE_ID} 
         />
       </div>
+      
+      <AutomationControl deviceId={DEFAULT_DEVICE_ID} />
+      <PlantMeasurements deviceId={DEFAULT_DEVICE_ID} />
     </div>
   );
 } 
