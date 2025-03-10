@@ -8,7 +8,6 @@ import MoistureChart from './components/MoistureChart';
 import ValveHistory from './components/ValveHistory';
 import AutomationSettings from './components/AutomationSettings';
 import TimeRangeSelector from './components/TimeRangeSelector';
-import AutomationControl from './components/AutomationControl';
 import PlantMeasurements from './components/PlantMeasurements';
 
 // Default device ID - this would typically come from user selection or configuration
@@ -131,8 +130,9 @@ export default function Home() {
         />
       </div>
       
-      <AutomationControl deviceId={DEFAULT_DEVICE_ID} />
-      <PlantMeasurements deviceId={DEFAULT_DEVICE_ID} />
+      <div className="mt-8">
+        <PlantMeasurements deviceId={DEFAULT_DEVICE_ID} />
+      </div>
     </div>
   );
 } 
