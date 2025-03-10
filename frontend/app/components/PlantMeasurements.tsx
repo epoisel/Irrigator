@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState, useEffect } from 'react';
 import { addMeasurement, getMeasurements, PlantMeasurement } from '../services/measurements';
 import { Line } from 'react-chartjs-2';
