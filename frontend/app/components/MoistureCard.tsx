@@ -29,43 +29,48 @@ export default function MoistureCard({ moistureData, isLoading }: MoistureCardPr
   
   const status = getMoistureStatus(moistureLevel);
   
+  if (isLoading) {
+    return (
+      <div className="bg-white p-6 rounded-lg shadow animate-pulse">
+        <div className="h-24 bg-gray-200 rounded"></div>
+      </div>
+    );
+  }
+
+  if (!moistureData) {
+    return (
+      <div className="bg-white p-6 rounded-lg shadow">
+        <p className="text-gray-500">No moisture data available</p>
+      </div>
+    );
+  }
+
+  // Determine moisture level class
+  const getMoistureClass = (moisture: number) => {
+    if (moisture < 20) return "text-red-600";
+    if (moisture < 40) return "text-orange-600";
+    if (moisture < 60) return "text-yellow-600";
+    if (moisture < 80) return "text-green-600";
+    return "text-blue-600";
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
       <h2 className="text-xl font-semibold mb-4">Current Moisture Level</h2>
       
-      {isLoading ? (
-        <div className="flex justify-center items-center h-32">
-          <div className="loading-spinner"></div>
+      <div className="text-center">
+        <div className={`text-4xl font-bold ${getMoistureClass(moistureData.moisture)}`}>
+          {moistureData.moisture.toFixed(1)}%
         </div>
-      ) : (
-        <>
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-gray-600">Level:</span>
-            <span className="text-2xl font-bold">
-              {moistureLevel !== null ? `${moistureLevel.toFixed(1)}%` : 'N/A'}
-            </span>
+        {moistureData.raw_adc_value && (
+          <div className="mt-2 text-sm text-gray-500">
+            Raw ADC Value: {moistureData.raw_adc_value}
           </div>
-          
-          <div className="h-4 bg-gray-200 rounded-full overflow-hidden mb-2">
-            <div 
-              className={`h-full moisture-gauge ${status.color}`}
-              style={{ width: `${moistureLevel || 0}%` }}
-            ></div>
-          </div>
-          
-          <div className="text-right text-sm font-medium text-gray-600">
-            Status: <span className="font-semibold">{status.text}</span>
-          </div>
-          
-          <div className="mt-4 text-xs text-gray-500">
-            {moistureData ? (
-              <p>Last updated: {new Date(moistureData.timestamp).toLocaleString()}</p>
-            ) : (
-              <p>No data available</p>
-            )}
-          </div>
-        </>
-      )}
+        )}
+        <div className="mt-2 text-sm text-gray-500">
+          Last updated: {new Date(moistureData.timestamp).toLocaleString()}
+        </div>
+      </div>
     </div>
   );
 } 

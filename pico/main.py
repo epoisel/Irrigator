@@ -13,6 +13,8 @@ import time
 from machine import ADC, Pin
 import json
 import gc
+import machine
+import config
 
 # Import configuration
 try:
@@ -43,13 +45,11 @@ led = Pin("LED", Pin.OUT)
 
 # WiFi connection
 wlan = network.WLAN(network.STA_IF)
+wlan.active(True)
 
 def connect_wifi():
     """Connect to WiFi network"""
     print(f"Connecting to WiFi: {config.WIFI_SSID}")
-    
-    # Activate WiFi interface
-    wlan.active(True)
     
     # Disconnect if already connected
     if wlan.isconnected():
@@ -73,27 +73,76 @@ def connect_wifi():
     print("Failed to connect to WiFi")
     return False
 
+def update_calibration_values(adc_value):
+    """
+    Dynamically update calibration values if a reading is outside current range.
+    Returns True if values were updated, False otherwise.
+    """
+    try:
+        updated = False
+        # If reading is wetter than current min (remember: lower ADC = wetter)
+        if adc_value < config.MOISTURE_MIN_VALUE:
+            print(f"New minimum ADC value found: {adc_value} (old: {config.MOISTURE_MIN_VALUE})")
+            config.MOISTURE_MIN_VALUE = adc_value
+            updated = True
+            
+        # If reading is drier than current max
+        elif adc_value > config.MOISTURE_MAX_VALUE:
+            print(f"New maximum ADC value found: {adc_value} (old: {config.MOISTURE_MAX_VALUE})")
+            config.MOISTURE_MAX_VALUE = adc_value
+            updated = True
+            
+        if updated:
+            print("Updating calibration values in config.py...")
+            # Update the config file with new values
+            with open('config.py', 'r') as f:
+                lines = f.readlines()
+                
+            with open('config.py', 'w') as f:
+                for line in lines:
+                    if 'MOISTURE_MIN_VALUE' in line and not line.strip().startswith('#'):
+                        f.write(f"MOISTURE_MIN_VALUE = {config.MOISTURE_MIN_VALUE}  # ADC value when soil is very wet\n")
+                    elif 'MOISTURE_MAX_VALUE' in line and not line.strip().startswith('#'):
+                        f.write(f"MOISTURE_MAX_VALUE = {config.MOISTURE_MAX_VALUE}  # ADC value when soil is very dry\n")
+                    else:
+                        f.write(line)
+            print("Calibration values updated successfully")
+            return True
+    except Exception as e:
+        print(f"Error updating calibration: {e}")
+        # If there's any error, just continue without updating
+        pass
+    return False
+
 def read_moisture():
-    """
-    Read moisture level from sensor
-    Returns a value between 0-100 (percentage)
-    """
+    """Read moisture level from sensor and return percentage and raw ADC value."""
     # Take multiple readings and average them for stability
-    readings = [moisture_sensor.read_u16() for _ in range(5)]
-    avg_reading = sum(readings) / len(readings)
+    readings = []
+    for _ in range(10):  # Take 10 readings
+        readings.append(moisture_sensor.read_u16())
+        time.sleep_ms(100)  # Small delay between readings
     
-    # Convert ADC reading to percentage (0-100%)
-    min_value = config.MOISTURE_MIN_VALUE
-    max_value = config.MOISTURE_MAX_VALUE
+    # Remove outliers (values more than 2 standard deviations from mean)
+    mean = sum(readings) / len(readings)
+    std_dev = (sum((x - mean) ** 2 for x in readings) / len(readings)) ** 0.5
+    filtered_readings = [x for x in readings if abs(x - mean) <= 2 * std_dev]
     
-    # Calculate percentage (inverted as higher ADC value = lower moisture)
-    if avg_reading >= max_value:
-        return 0.0
-    elif avg_reading <= min_value:
-        return 100.0
+    if not filtered_readings:  # If all readings were outliers, use original mean
+        adc_value = mean
     else:
-        moisture_pct = ((max_value - avg_reading) / (max_value - min_value)) * 100.0
-        return moisture_pct
+        adc_value = sum(filtered_readings) / len(filtered_readings)
+    
+    # Update calibration if reading is outside current range
+    if update_calibration_values(adc_value):
+        print(f"New calibration - MIN: {config.MOISTURE_MIN_VALUE}, MAX: {config.MOISTURE_MAX_VALUE}")
+    
+    # Convert to percentage (0-100)
+    # Note: ADC value is inverted (higher value = drier soil)
+    moisture_percentage = ((config.MOISTURE_MAX_VALUE - adc_value) / 
+                         (config.MOISTURE_MAX_VALUE - config.MOISTURE_MIN_VALUE)) * 100
+    
+    # Clamp to 0-100 range
+    return max(0, min(100, moisture_percentage)), adc_value
 
 def control_valve(state):
     """Control the solenoid valve (0=OFF, 1=ON)"""
@@ -103,9 +152,11 @@ def control_valve(state):
 def send_data_to_server(moisture):
     """Send moisture data to server"""
     try:
+        moisture_pct, adc_value = moisture  # Now moisture is a tuple (percentage, raw_adc)
         data = {
             "device_id": config.DEVICE_ID,
-            "moisture": moisture
+            "moisture": moisture_pct,
+            "raw_adc_value": adc_value
         }
         
         print(f"Sending data: {data}")
@@ -176,14 +227,14 @@ def main():
             current_time = time.time()
             if current_time - last_reading_time >= config.CHECK_INTERVAL:
                 # Read moisture level
-                moisture = read_moisture()
-                print(f"Moisture level: {moisture:.1f}%")
+                moisture_pct, adc_value = read_moisture()
+                print(f"Moisture: {moisture_pct:.1f}% (ADC: {adc_value})")
                 
                 # Blink LED to indicate activity
                 blink_led(1)
                 
                 # Send data to server
-                if send_data_to_server(moisture):
+                if send_data_to_server((moisture_pct, adc_value)):
                     last_reading_time = current_time
                     blink_led(2)  # Double blink on successful send
                 

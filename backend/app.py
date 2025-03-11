@@ -28,12 +28,13 @@ def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    # Create moisture_data table
+    # Create moisture_data table with raw_adc_value column
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS moisture_data (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         device_id TEXT NOT NULL,
         moisture REAL NOT NULL,
+        raw_adc_value INTEGER,
         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
     )
     ''')
@@ -137,13 +138,14 @@ def receive_sensor_data():
         
         device_id = data['device_id']
         moisture = float(data['moisture'])
+        raw_adc_value = data.get('raw_adc_value')  # New field for ADC value
         
         # Store in database
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute(
-            'INSERT INTO moisture_data (device_id, moisture) VALUES (?, ?)',
-            (device_id, moisture)
+            'INSERT INTO moisture_data (device_id, moisture, raw_adc_value) VALUES (?, ?, ?)',
+            (device_id, moisture, raw_adc_value)
         )
         conn.commit()
         conn.close()

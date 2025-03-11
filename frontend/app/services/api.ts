@@ -11,6 +11,7 @@ export interface MoistureData {
   id: number;
   device_id: string;
   moisture: number;
+  raw_adc_value?: number;
   timestamp: string;
 }
 
