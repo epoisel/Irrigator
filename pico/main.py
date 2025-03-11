@@ -83,13 +83,13 @@ def update_calibration_values(adc_value):
         # If reading is wetter than current min (remember: lower ADC = wetter)
         if adc_value < config.MOISTURE_MIN_VALUE:
             print(f"New minimum ADC value found: {adc_value} (old: {config.MOISTURE_MIN_VALUE})")
-            config.MOISTURE_MIN_VALUE = adc_value
+            config.MOISTURE_MIN_VALUE = int(round(adc_value))  # Round to nearest integer
             updated = True
             
         # If reading is drier than current max
         elif adc_value > config.MOISTURE_MAX_VALUE:
             print(f"New maximum ADC value found: {adc_value} (old: {config.MOISTURE_MAX_VALUE})")
-            config.MOISTURE_MAX_VALUE = adc_value
+            config.MOISTURE_MAX_VALUE = int(round(adc_value))  # Round to nearest integer
             updated = True
             
         if updated:
@@ -119,7 +119,8 @@ def read_moisture():
     # Take multiple readings and average them for stability
     readings = []
     for _ in range(10):  # Take 10 readings
-        readings.append(moisture_sensor.read_u16())
+        # Use 12-bit reading (0-4095) instead of 16-bit (0-65535)
+        readings.append(moisture_sensor.read_u16() >> 4)  # Shift right by 4 to convert 16-bit to 12-bit
         time.sleep_ms(100)  # Small delay between readings
     
     # Remove outliers (values more than 2 standard deviations from mean)
@@ -128,9 +129,13 @@ def read_moisture():
     filtered_readings = [x for x in readings if abs(x - mean) <= 2 * std_dev]
     
     if not filtered_readings:  # If all readings were outliers, use original mean
-        adc_value = mean
+        adc_value = int(round(mean))  # Round to nearest integer
     else:
-        adc_value = sum(filtered_readings) / len(filtered_readings)
+        adc_value = int(round(sum(filtered_readings) / len(filtered_readings)))  # Round to nearest integer
+    
+    # Print both 12-bit ADC value and approximate voltage
+    voltage = (adc_value * 3.3) / 4095
+    print(f"Raw ADC (12-bit): {adc_value}, Voltage: {voltage:.2f}V")
     
     # Update calibration if reading is outside current range
     if update_calibration_values(adc_value):

@@ -34,6 +34,7 @@ const PlantMeasurements: React.FC<Props> = ({ deviceId }) => {
     const [error, setError] = useState<string | null>(null);
     const [formData, setFormData] = useState<PlantMeasurement>({
         device_id: deviceId,
+        plant_name: '',
         height: undefined,
         leaf_count: undefined,
         stem_thickness: undefined,
@@ -74,6 +75,7 @@ const PlantMeasurements: React.FC<Props> = ({ deviceId }) => {
             // Reset form
             setFormData({
                 device_id: deviceId,
+                plant_name: '',
                 height: undefined,
                 leaf_count: undefined,
                 stem_thickness: undefined,
@@ -135,6 +137,20 @@ const PlantMeasurements: React.FC<Props> = ({ deviceId }) => {
                     </div>
                 )}
                 <form onSubmit={handleSubmit} className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">
+                            Plant Name
+                            <input
+                                type="text"
+                                name="plant_name"
+                                value={formData.plant_name || ''}
+                                onChange={handleInputChange}
+                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                placeholder="Enter plant name"
+                            />
+                        </label>
+                    </div>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700">
@@ -327,6 +343,7 @@ const PlantMeasurements: React.FC<Props> = ({ deviceId }) => {
                         <thead className="bg-gray-50">
                             <tr>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Plant Name</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Height</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Leaf Count</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Health Score</th>
@@ -338,6 +355,9 @@ const PlantMeasurements: React.FC<Props> = ({ deviceId }) => {
                                 <tr key={index}>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                         {new Date(measurement.timestamp!).toLocaleDateString()}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        {measurement.plant_name || 'Unnamed Plant'}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                         {measurement.height ? `${measurement.height} cm` : '-'}

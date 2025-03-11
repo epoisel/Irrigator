@@ -63,11 +63,12 @@ def init_db():
     )
     ''')
 
-    # Create plant_measurements table
+    # Create plant_measurements table with plant_name
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS plant_measurements (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         device_id TEXT NOT NULL,
+        plant_name TEXT NOT NULL DEFAULT 'My Plant',
         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
         height REAL,
         leaf_count INTEGER,
@@ -452,6 +453,7 @@ def add_measurement():
 
         # Extract data with defaults for optional fields
         device_id = data['device_id']
+        plant_name = data.get('plant_name', 'My Plant')
         height = data.get('height')
         leaf_count = data.get('leaf_count')
         stem_thickness = data.get('stem_thickness')
@@ -469,12 +471,12 @@ def add_measurement():
         
         cursor.execute('''
             INSERT INTO plant_measurements (
-                device_id, height, leaf_count, stem_thickness, canopy_width,
+                device_id, plant_name, height, leaf_count, stem_thickness, canopy_width,
                 leaf_color, leaf_firmness, health_score, notes,
                 fertilized, pruned, ph_reading
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
-            device_id, height, leaf_count, stem_thickness, canopy_width,
+            device_id, plant_name, height, leaf_count, stem_thickness, canopy_width,
             leaf_color, leaf_firmness, health_score, notes,
             fertilized, pruned, ph_reading
         ))

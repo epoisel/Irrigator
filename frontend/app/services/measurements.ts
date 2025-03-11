@@ -5,6 +5,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL;
 export interface PlantMeasurement {
     id?: number;
     device_id: string;
+    plant_name?: string;
     timestamp?: string;
     height?: number;
     leaf_count?: number;
