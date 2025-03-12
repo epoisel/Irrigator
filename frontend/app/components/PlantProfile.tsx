@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { PlantMeasurement, PlantPhoto, getMeasurements, updateMeasurement, deleteMeasurement, uploadPhoto, getPhotos, getPhotoUrl, deletePhoto } from '@/app/services/measurements';
+import { PlantMeasurement, PlantPhoto, getMeasurements, updateMeasurement, deleteMeasurement, uploadPhoto, getPhotos, getPhotoUrl, deletePhoto } from '../services/measurements';
 import { Line } from 'react-chartjs-2';
 import Image from 'next/image';
 import {
