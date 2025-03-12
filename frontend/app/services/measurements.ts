@@ -2,6 +2,12 @@ import axios from 'axios';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
+export interface PlantPhoto {
+    id: number;
+    filename: string;
+    timestamp: string;
+}
+
 export interface PlantMeasurement {
     id?: number;
     device_id: string;
@@ -17,6 +23,7 @@ export interface PlantMeasurement {
     fertilized?: boolean;
     pruned?: boolean;
     health_score?: number;
+    photos?: PlantPhoto[];
 }
 
 export const addMeasurement = async (measurement: PlantMeasurement) => {
@@ -41,6 +48,26 @@ export const getMeasurements = async (deviceId: string, days: number = 30) => {
         }));
     } catch (error) {
         console.error('Error fetching measurements:', error);
+        throw error;
+    }
+};
+
+export const updateMeasurement = async (id: number, measurement: Partial<PlantMeasurement>) => {
+    try {
+        const response = await axios.put(`${API_URL}/api/measurements/${id}`, measurement);
+        return response.data;
+    } catch (error) {
+        console.error('Error updating measurement:', error);
+        throw error;
+    }
+};
+
+export const deleteMeasurement = async (id: number) => {
+    try {
+        const response = await axios.delete(`${API_URL}/api/measurements/${id}`);
+        return response.data;
+    } catch (error) {
+        console.error('Error deleting measurement:', error);
         throw error;
     }
 };
@@ -71,4 +98,49 @@ export const calculateHealthScore = (measurement: PlantMeasurement): number => {
 
     // Return average score if we have metrics, otherwise 0
     return metrics > 0 ? Math.round(score / metrics) : 0;
+};
+
+export const uploadPhoto = async (measurementId: number, photo: File) => {
+    try {
+        const formData = new FormData();
+        formData.append('photo', photo);
+
+        const response = await axios.post(
+            `${API_URL}/api/measurements/${measurementId}/photos`,
+            formData,
+            {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                },
+            }
+        );
+        return response.data;
+    } catch (error) {
+        console.error('Error uploading photo:', error);
+        throw error;
+    }
+};
+
+export const getPhotos = async (measurementId: number) => {
+    try {
+        const response = await axios.get(`${API_URL}/api/measurements/${measurementId}/photos`);
+        return response.data;
+    } catch (error) {
+        console.error('Error fetching photos:', error);
+        throw error;
+    }
+};
+
+export const getPhotoUrl = (photoId: number) => {
+    return `${API_URL}/api/photos/${photoId}`;
+};
+
+export const deletePhoto = async (photoId: number) => {
+    try {
+        const response = await axios.delete(`${API_URL}/api/photos/${photoId}`);
+        return response.data;
+    } catch (error) {
+        console.error('Error deleting photo:', error);
+        throw error;
+    }
 }; 
