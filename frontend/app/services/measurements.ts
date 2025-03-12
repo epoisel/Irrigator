@@ -16,6 +16,7 @@ export interface PlantMeasurement {
     notes?: string;
     fertilized?: boolean;
     pruned?: boolean;
+    health_score?: number;
 }
 
 export const addMeasurement = async (measurement: PlantMeasurement) => {
