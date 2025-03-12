@@ -41,11 +41,9 @@ const PlantMeasurements: React.FC<Props> = ({ deviceId }) => {
         canopy_width: undefined,
         leaf_color: undefined,
         leaf_firmness: undefined,
-        health_score: undefined,
         notes: '',
         fertilized: false,
         pruned: false,
-        ph_reading: undefined,
     });
 
     useEffect(() => {
@@ -82,11 +80,9 @@ const PlantMeasurements: React.FC<Props> = ({ deviceId }) => {
                 canopy_width: undefined,
                 leaf_color: undefined,
                 leaf_firmness: undefined,
-                health_score: undefined,
                 notes: '',
                 fertilized: false,
                 pruned: false,
-                ph_reading: undefined,
             });
             setError(null);
         } catch (err) {
@@ -237,35 +233,6 @@ const PlantMeasurements: React.FC<Props> = ({ deviceId }) => {
                                     <option value="4">4 - Firm</option>
                                     <option value="5">5 - Very Firm</option>
                                 </select>
-                            </label>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">
-                                Health Score (1-10)
-                                <input
-                                    type="number"
-                                    name="health_score"
-                                    value={formData.health_score || ''}
-                                    onChange={handleInputChange}
-                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                                    min="1"
-                                    max="10"
-                                />
-                            </label>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">
-                                pH Reading
-                                <input
-                                    type="number"
-                                    name="ph_reading"
-                                    value={formData.ph_reading || ''}
-                                    onChange={handleInputChange}
-                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                                    step="0.1"
-                                    min="0"
-                                    max="14"
-                                />
                             </label>
                         </div>
                     </div>

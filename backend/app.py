@@ -76,11 +76,9 @@ def init_db():
         canopy_width REAL,
         leaf_color INTEGER,
         leaf_firmness INTEGER,
-        health_score INTEGER,
         notes TEXT,
         fertilized BOOLEAN DEFAULT 0,
         pruned BOOLEAN DEFAULT 0,
-        ph_reading REAL,
         FOREIGN KEY(device_id) REFERENCES automation_rules(device_id)
     )
     ''')
@@ -460,11 +458,9 @@ def add_measurement():
         canopy_width = data.get('canopy_width')
         leaf_color = data.get('leaf_color')
         leaf_firmness = data.get('leaf_firmness')
-        health_score = data.get('health_score')
         notes = data.get('notes')
         fertilized = data.get('fertilized', False)
         pruned = data.get('pruned', False)
-        ph_reading = data.get('ph_reading')
 
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
@@ -472,13 +468,11 @@ def add_measurement():
         cursor.execute('''
             INSERT INTO plant_measurements (
                 device_id, plant_name, height, leaf_count, stem_thickness, canopy_width,
-                leaf_color, leaf_firmness, health_score, notes,
-                fertilized, pruned, ph_reading
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                leaf_color, leaf_firmness, notes, fertilized, pruned
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             device_id, plant_name, height, leaf_count, stem_thickness, canopy_width,
-            leaf_color, leaf_firmness, health_score, notes,
-            fertilized, pruned, ph_reading
+            leaf_color, leaf_firmness, notes, fertilized, pruned
         ))
         
         conn.commit()
