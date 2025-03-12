@@ -13,6 +13,8 @@ import {
     Tooltip,
     Legend
 } from 'chart.js';
+import PlantProfile from './PlantProfile';
+import { Button } from "@/components/ui/button";
 
 ChartJS.register(
     CategoryScale,
@@ -32,6 +34,7 @@ const PlantMeasurements: React.FC<Props> = ({ deviceId }) => {
     const [measurements, setMeasurements] = useState<PlantMeasurement[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [selectedPlant, setSelectedPlant] = useState<string | null>(null);
     const [formData, setFormData] = useState<PlantMeasurement>({
         device_id: deviceId,
         plant_name: '',
@@ -324,7 +327,13 @@ const PlantMeasurements: React.FC<Props> = ({ deviceId }) => {
                                         {new Date(measurement.timestamp!).toLocaleDateString()}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        {measurement.plant_name || 'Unnamed Plant'}
+                                        <Button
+                                            variant="link"
+                                            onClick={() => setSelectedPlant(measurement.plant_name || 'Unnamed Plant')}
+                                            className="p-0 h-auto font-normal hover:text-indigo-700"
+                                        >
+                                            {measurement.plant_name || 'Unnamed Plant'}
+                                        </Button>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                         {measurement.height ? `${measurement.height} cm` : '-'}
@@ -343,6 +352,15 @@ const PlantMeasurements: React.FC<Props> = ({ deviceId }) => {
                         </tbody>
                     </table>
                 </div>
+            )}
+
+            {selectedPlant && (
+                <PlantProfile
+                    deviceId={deviceId}
+                    plantName={selectedPlant}
+                    isOpen={!!selectedPlant}
+                    onClose={() => setSelectedPlant(null)}
+                />
             )}
         </div>
     );
