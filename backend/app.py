@@ -1,17 +1,38 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import sqlite3
 import os
 import datetime
 import time
 import threading
+from werkzeug.utils import secure_filename
 
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+CORS(app, resources={
+    r"/*": {
+        "origins": "*",
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Accept", "Authorization"],
+        "expose_headers": ["Content-Type", "Content-Length"],
+        "supports_credentials": False,
+        "max_age": 86400
+    }
+})
 
 # Database setup
 DB_PATH = os.path.join(os.path.dirname(__file__), 'irrigation.db')
+
+# Photo upload configuration
+UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads')
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
+
+# Create upload folder if it doesn't exist
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+def allowed_file(filename):
+    """Check if the file extension is allowed"""
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 # Watering control constants
 WICKING_WAIT_TIME = 60 * 60  # 60 minutes in seconds
@@ -80,6 +101,18 @@ def init_db():
         fertilized BOOLEAN DEFAULT 0,
         pruned BOOLEAN DEFAULT 0,
         FOREIGN KEY(device_id) REFERENCES automation_rules(device_id)
+    )
+    ''')
+
+    # Create plant_photos table
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS plant_photos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        measurement_id INTEGER NOT NULL,
+        filename TEXT NOT NULL,
+        file_path TEXT NOT NULL,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(measurement_id) REFERENCES plant_measurements(id) ON DELETE CASCADE
     )
     ''')
     
@@ -509,6 +542,250 @@ def get_measurements(device_id):
         return jsonify(measurements), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/measurements/<int:measurement_id>', methods=['PUT'])
+def update_measurement(measurement_id):
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        # Get the existing measurement
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM plant_measurements WHERE id = ?', (measurement_id,))
+        existing = cursor.fetchone()
+        
+        if not existing:
+            return jsonify({'error': 'Measurement not found'}), 404
+
+        # Update the measurement
+        update_fields = []
+        update_values = []
+        
+        # Only update fields that are provided
+        if 'plant_name' in data:
+            update_fields.append('plant_name = ?')
+            update_values.append(data['plant_name'])
+        if 'height' in data:
+            update_fields.append('height = ?')
+            update_values.append(data['height'])
+        if 'leaf_count' in data:
+            update_fields.append('leaf_count = ?')
+            update_values.append(data['leaf_count'])
+        if 'stem_thickness' in data:
+            update_fields.append('stem_thickness = ?')
+            update_values.append(data['stem_thickness'])
+        if 'canopy_width' in data:
+            update_fields.append('canopy_width = ?')
+            update_values.append(data['canopy_width'])
+        if 'leaf_color' in data:
+            update_fields.append('leaf_color = ?')
+            update_values.append(data['leaf_color'])
+        if 'leaf_firmness' in data:
+            update_fields.append('leaf_firmness = ?')
+            update_values.append(data['leaf_firmness'])
+        if 'notes' in data:
+            update_fields.append('notes = ?')
+            update_values.append(data['notes'])
+        if 'fertilized' in data:
+            update_fields.append('fertilized = ?')
+            update_values.append(1 if data['fertilized'] else 0)
+        if 'pruned' in data:
+            update_fields.append('pruned = ?')
+            update_values.append(1 if data['pruned'] else 0)
+            
+        if not update_fields:
+            return jsonify({'error': 'No fields to update'}), 400
+            
+        # Add measurement_id to values for WHERE clause
+        update_values.append(measurement_id)
+        
+        # Construct and execute update query
+        query = f'''
+            UPDATE plant_measurements 
+            SET {', '.join(update_fields)}
+            WHERE id = ?
+        '''
+        
+        cursor.execute(query, update_values)
+        conn.commit()
+        
+        # Return updated measurement
+        cursor.execute('SELECT * FROM plant_measurements WHERE id = ?', (measurement_id,))
+        updated = cursor.fetchone()
+        
+        return jsonify({
+            'id': updated[0],
+            'device_id': updated[1],
+            'timestamp': updated[2],
+            'plant_name': updated[3],
+            'height': updated[4],
+            'leaf_count': updated[5],
+            'stem_thickness': updated[6],
+            'canopy_width': updated[7],
+            'leaf_color': updated[8],
+            'leaf_firmness': updated[9],
+            'notes': updated[10],
+            'fertilized': bool(updated[11]),
+            'pruned': bool(updated[12])
+        })
+        
+    except Exception as e:
+        print(f"Error updating measurement: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/api/measurements/<int:measurement_id>', methods=['DELETE'])
+def delete_measurement(measurement_id):
+    """Delete a specific measurement."""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Check if measurement exists
+        cursor.execute('SELECT id FROM plant_measurements WHERE id = ?', (measurement_id,))
+        if not cursor.fetchone():
+            return jsonify({'error': 'Measurement not found'}), 404
+            
+        # Delete the measurement
+        cursor.execute('DELETE FROM plant_measurements WHERE id = ?', (measurement_id,))
+        conn.commit()
+        conn.close()
+        
+        return jsonify({'status': 'success', 'message': 'Measurement deleted'}), 200
+        
+    except Exception as e:
+        print(f"Error deleting measurement: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/api/measurements/<int:measurement_id>/photos', methods=['POST'])
+def upload_photo(measurement_id):
+    """Upload a photo for a specific measurement."""
+    try:
+        # Check if measurement exists
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute('SELECT id FROM plant_measurements WHERE id = ?', (measurement_id,))
+        if not cursor.fetchone():
+            return jsonify({'error': 'Measurement not found'}), 404
+
+        if 'photo' not in request.files:
+            return jsonify({'error': 'No photo file provided'}), 400
+
+        photo = request.files['photo']
+        if photo.filename == '':
+            return jsonify({'error': 'No selected file'}), 400
+
+        if photo and allowed_file(photo.filename):
+            # Secure the filename and create unique filename
+            filename = secure_filename(photo.filename)
+            base_name, extension = os.path.splitext(filename)
+            timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+            unique_filename = f"{base_name}_{timestamp}{extension}"
+            
+            # Save the file
+            file_path = os.path.join(UPLOAD_FOLDER, unique_filename)
+            photo.save(file_path)
+            
+            # Store file info in database
+            cursor.execute('''
+                INSERT INTO plant_photos (measurement_id, filename, file_path)
+                VALUES (?, ?, ?)
+            ''', (measurement_id, unique_filename, file_path))
+            
+            conn.commit()
+            photo_id = cursor.lastrowid
+            conn.close()
+            
+            return jsonify({
+                'status': 'success',
+                'id': photo_id,
+                'filename': unique_filename
+            }), 200
+        
+        return jsonify({'error': 'Invalid file type'}), 400
+        
+    except Exception as e:
+        print(f"Error uploading photo: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/api/measurements/<int:measurement_id>/photos', methods=['GET'])
+def get_photos(measurement_id):
+    """Get all photos for a specific measurement."""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT id, filename, timestamp 
+            FROM plant_photos 
+            WHERE measurement_id = ?
+            ORDER BY timestamp DESC
+        ''', (measurement_id,))
+        
+        rows = cursor.fetchall()
+        photos = [dict(row) for row in rows]
+        conn.close()
+        
+        return jsonify(photos), 200
+        
+    except Exception as e:
+        print(f"Error getting photos: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/api/photos/<int:photo_id>', methods=['GET'])
+def get_photo(photo_id):
+    """Get a specific photo by ID."""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT file_path FROM plant_photos WHERE id = ?', (photo_id,))
+        result = cursor.fetchone()
+        conn.close()
+        
+        if not result:
+            return jsonify({'error': 'Photo not found'}), 404
+            
+        return send_file(result[0], mimetype='image/jpeg')
+        
+    except Exception as e:
+        print(f"Error retrieving photo: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/api/photos/<int:photo_id>', methods=['DELETE'])
+def delete_photo(photo_id):
+    """Delete a specific photo."""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Get file path before deleting record
+        cursor.execute('SELECT file_path FROM plant_photos WHERE id = ?', (photo_id,))
+        result = cursor.fetchone()
+        
+        if not result:
+            return jsonify({'error': 'Photo not found'}), 404
+            
+        file_path = result[0]
+        
+        # Delete database record
+        cursor.execute('DELETE FROM plant_photos WHERE id = ?', (photo_id,))
+        conn.commit()
+        conn.close()
+        
+        # Delete actual file
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        
+        return jsonify({'status': 'success', 'message': 'Photo deleted'}), 200
+        
+    except Exception as e:
+        print(f"Error deleting photo: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False) 

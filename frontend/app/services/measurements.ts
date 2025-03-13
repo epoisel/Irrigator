@@ -2,6 +2,16 @@ import axios from 'axios';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
+// Create axios instance with default config
+const api = axios.create({
+    baseURL: API_URL,
+    headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+    },
+    withCredentials: false // Important for CORS
+});
+
 export interface PlantPhoto {
     id: number;
     filename: string;
@@ -28,7 +38,7 @@ export interface PlantMeasurement {
 
 export const addMeasurement = async (measurement: PlantMeasurement) => {
     try {
-        const response = await axios.post(`${API_URL}/api/measurements`, measurement);
+        const response = await api.post('/api/measurements', measurement);
         return response.data;
     } catch (error) {
         console.error('Error adding measurement:', error);
@@ -38,7 +48,7 @@ export const addMeasurement = async (measurement: PlantMeasurement) => {
 
 export const getMeasurements = async (deviceId: string, days: number = 30) => {
     try {
-        const response = await axios.get(`${API_URL}/api/measurements/${deviceId}?days=${days}`);
+        const response = await api.get(`/api/measurements/${deviceId}?days=${days}`);
         const measurements = response.data;
         
         // Calculate health score for each measurement
@@ -54,7 +64,7 @@ export const getMeasurements = async (deviceId: string, days: number = 30) => {
 
 export const updateMeasurement = async (id: number, measurement: Partial<PlantMeasurement>) => {
     try {
-        const response = await axios.put(`${API_URL}/api/measurements/${id}`, measurement);
+        const response = await api.put(`/api/measurements/${id}`, measurement);
         return response.data;
     } catch (error) {
         console.error('Error updating measurement:', error);
@@ -64,7 +74,7 @@ export const updateMeasurement = async (id: number, measurement: Partial<PlantMe
 
 export const deleteMeasurement = async (id: number) => {
     try {
-        const response = await axios.delete(`${API_URL}/api/measurements/${id}`);
+        const response = await api.delete(`/api/measurements/${id}`);
         return response.data;
     } catch (error) {
         console.error('Error deleting measurement:', error);
@@ -105,8 +115,8 @@ export const uploadPhoto = async (measurementId: number, photo: File) => {
         const formData = new FormData();
         formData.append('photo', photo);
 
-        const response = await axios.post(
-            `${API_URL}/api/measurements/${measurementId}/photos`,
+        const response = await api.post(
+            `/api/measurements/${measurementId}/photos`,
             formData,
             {
                 headers: {
@@ -123,7 +133,7 @@ export const uploadPhoto = async (measurementId: number, photo: File) => {
 
 export const getPhotos = async (measurementId: number) => {
     try {
-        const response = await axios.get(`${API_URL}/api/measurements/${measurementId}/photos`);
+        const response = await api.get(`/api/measurements/${measurementId}/photos`);
         return response.data;
     } catch (error) {
         console.error('Error fetching photos:', error);
@@ -137,7 +147,7 @@ export const getPhotoUrl = (photoId: number) => {
 
 export const deletePhoto = async (photoId: number) => {
     try {
-        const response = await axios.delete(`${API_URL}/api/photos/${photoId}`);
+        const response = await api.delete(`/api/photos/${photoId}`);
         return response.data;
     } catch (error) {
         console.error('Error deleting photo:', error);
