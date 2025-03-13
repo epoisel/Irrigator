@@ -558,12 +558,7 @@ def handle_measurement(measurement_id):
     """Handle all operations for a specific measurement."""
     # Handle preflight requests
     if request.method == 'OPTIONS':
-        response = make_response()
-        response.headers.add('Access-Control-Allow-Origin', '*')
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept')
-        response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-        response.headers.add('Access-Control-Max-Age', '86400')
-        return response
+        return '', 204
         
     elif request.method == 'DELETE':
         try:
@@ -594,8 +589,7 @@ def handle_measurement(measurement_id):
             conn.commit()
             conn.close()
             
-            response = jsonify({'status': 'success', 'message': 'Measurement deleted'})
-            return response, 200
+            return jsonify({'status': 'success', 'message': 'Measurement deleted'}), 200
             
         except Exception as e:
             print(f"Error deleting measurement: {str(e)}")
