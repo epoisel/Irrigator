@@ -242,11 +242,15 @@ const PlantProfile: React.FC<Props> = ({ deviceId, plantName, isOpen, onClose })
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="max-w-4xl">
+            <DialogContent className="max-w-4xl" aria-describedby="plant-profile-description">
                 <DialogHeader>
                     <DialogTitle>{plantName} - Plant Profile</DialogTitle>
                 </DialogHeader>
                 
+                <div id="plant-profile-description" className="sr-only">
+                    Detailed profile view for {plantName}, showing measurements, photos, and growth history.
+                </div>
+
                 {error && (
                     <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
                         {error}

@@ -562,6 +562,7 @@ def get_measurements(device_id):
 @app.route('/api/measurements/<int:measurement_id>', methods=['PUT', 'DELETE', 'GET', 'OPTIONS'])
 def handle_measurement(measurement_id):
     """Handle all operations for a specific measurement."""
+    # Handle preflight requests
     if request.method == 'OPTIONS':
         response = make_response()
         response.headers.add('Access-Control-Allow-Origin', '*')
@@ -577,9 +578,22 @@ def handle_measurement(measurement_id):
             # Check if measurement exists
             cursor.execute('SELECT id FROM plant_measurements WHERE id = ?', (measurement_id,))
             if not cursor.fetchone():
+                conn.close()
                 return jsonify({'error': 'Measurement not found'}), 404
                 
-            # Delete the measurement
+            # Delete associated photos first
+            cursor.execute('SELECT file_path FROM plant_photos WHERE measurement_id = ?', (measurement_id,))
+            photos = cursor.fetchall()
+            
+            # Delete photo files
+            for photo in photos:
+                try:
+                    if os.path.exists(photo[0]):
+                        os.remove(photo[0])
+                except Exception as e:
+                    print(f"Error deleting photo file: {str(e)}")
+            
+            # Delete the measurement and associated photos (cascade delete will handle photos table)
             cursor.execute('DELETE FROM plant_measurements WHERE id = ?', (measurement_id,))
             conn.commit()
             conn.close()
@@ -588,6 +602,8 @@ def handle_measurement(measurement_id):
             
         except Exception as e:
             print(f"Error deleting measurement: {str(e)}")
+            if conn:
+                conn.close()
             return jsonify({'error': 'Internal server error'}), 500
             
     elif request.method == 'PUT':
