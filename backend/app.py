@@ -23,17 +23,11 @@ CORS(app, resources={
 # Add OPTIONS handler for preflight requests
 @app.after_request
 def after_request(response):
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-    return response
-
-@app.route('/api/measurements/<int:measurement_id>', methods=['OPTIONS'])
-def measurements_options(measurement_id):
-    response = make_response()
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    if request.method == 'OPTIONS':
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+        response.headers.add('Access-Control-Max-Age', '86400')
     return response
 
 # Database setup
@@ -566,8 +560,9 @@ def handle_measurement(measurement_id):
     if request.method == 'OPTIONS':
         response = make_response()
         response.headers.add('Access-Control-Allow-Origin', '*')
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept')
         response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+        response.headers.add('Access-Control-Max-Age', '86400')
         return response
         
     elif request.method == 'DELETE':
@@ -578,7 +573,8 @@ def handle_measurement(measurement_id):
             # Check if measurement exists
             cursor.execute('SELECT id FROM plant_measurements WHERE id = ?', (measurement_id,))
             if not cursor.fetchone():
-                conn.close()
+                if 'conn' in locals():
+                    conn.close()
                 return jsonify({'error': 'Measurement not found'}), 404
                 
             # Delete associated photos first
@@ -598,11 +594,12 @@ def handle_measurement(measurement_id):
             conn.commit()
             conn.close()
             
-            return jsonify({'status': 'success', 'message': 'Measurement deleted'}), 200
+            response = jsonify({'status': 'success', 'message': 'Measurement deleted'})
+            return response, 200
             
         except Exception as e:
             print(f"Error deleting measurement: {str(e)}")
-            if conn:
+            if 'conn' in locals():
                 conn.close()
             return jsonify({'error': 'Internal server error'}), 500
             
