@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -11,6 +11,38 @@ const api = axios.create({
     },
     withCredentials: false // Important for CORS
 });
+
+// Add request interceptor to ensure headers are set
+api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+    if (config.headers) {
+        config.headers.set('Content-Type', 'application/json');
+        config.headers.set('Accept', 'application/json');
+    }
+    return config;
+});
+
+// Add response interceptor for better error handling
+api.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        if (error.response) {
+            // The request was made and the server responded with a status code
+            // that falls out of the range of 2xx
+            console.error('Response error:', {
+                data: error.response.data,
+                status: error.response.status,
+                headers: error.response.headers,
+            });
+        } else if (error.request) {
+            // The request was made but no response was received
+            console.error('Request error:', error.request);
+        } else {
+            // Something happened in setting up the request that triggered an Error
+            console.error('Error:', error.message);
+        }
+        return Promise.reject(error);
+    }
+);
 
 export interface PlantPhoto {
     id: number;
@@ -74,10 +106,22 @@ export const updateMeasurement = async (id: number, measurement: Partial<PlantMe
 
 export const deleteMeasurement = async (id: number) => {
     try {
-        const response = await api.delete(`/api/measurements/${id}`);
+        const response = await api.delete(`/api/measurements/${id}`, {
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+            }
+        });
         return response.data;
     } catch (error) {
-        console.error('Error deleting measurement:', error);
+        if (axios.isAxiosError(error)) {
+            console.error('Delete measurement error:', {
+                status: error.response?.status,
+                data: error.response?.data,
+                headers: error.response?.headers
+            });
+            throw new Error(error.response?.data?.error || 'Failed to delete measurement');
+        }
         throw error;
     }
 };

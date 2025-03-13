@@ -168,14 +168,25 @@ const PlantProfile: React.FC<Props> = ({ deviceId, plantName, isOpen, onClose })
     };
 
     const handleDelete = async (measurement: PlantMeasurement) => {
+        if (!measurement.id) {
+            setError('Cannot delete measurement: Invalid ID');
+            return;
+        }
+
         try {
+            setError(null); // Clear any previous errors
             setLoading(true);
-            await deleteMeasurement(measurement.id!);
+            
+            await deleteMeasurement(measurement.id);
             setDeletingMeasurement(null);
+            
+            // Refresh the measurements list
             await fetchMeasurements();
+            
         } catch (err) {
-            setError('Failed to delete measurement');
-            console.error(err);
+            const errorMessage = err instanceof Error ? err.message : 'Failed to delete measurement';
+            setError(errorMessage);
+            console.error('Delete error:', err);
         } finally {
             setLoading(false);
         }
