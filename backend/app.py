@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, send_file, make_response
 from flask_cors import CORS
 import sqlite3
 import os
@@ -19,6 +19,22 @@ CORS(app, resources={
         "max_age": 86400
     }
 })
+
+# Add OPTIONS handler for preflight requests
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    return response
+
+@app.route('/api/measurements/<int:measurement_id>', methods=['OPTIONS'])
+def measurements_options(measurement_id):
+    response = make_response()
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    return response
 
 # Database setup
 DB_PATH = os.path.join(os.path.dirname(__file__), 'irrigation.db')
@@ -543,122 +559,129 @@ def get_measurements(device_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/measurements/<int:measurement_id>', methods=['PUT'])
-def update_measurement(measurement_id):
-    try:
-        data = request.get_json()
+@app.route('/api/measurements/<int:measurement_id>', methods=['PUT', 'DELETE', 'GET', 'OPTIONS'])
+def handle_measurement(measurement_id):
+    """Handle all operations for a specific measurement."""
+    if request.method == 'OPTIONS':
+        response = make_response()
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+        return response
         
-        # Validate required fields
-        if not data:
-            return jsonify({'error': 'No data provided'}), 400
-
-        # Get the existing measurement
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM plant_measurements WHERE id = ?', (measurement_id,))
-        existing = cursor.fetchone()
-        
-        if not existing:
-            return jsonify({'error': 'Measurement not found'}), 404
-
-        # Update the measurement
-        update_fields = []
-        update_values = []
-        
-        # Only update fields that are provided
-        if 'plant_name' in data:
-            update_fields.append('plant_name = ?')
-            update_values.append(data['plant_name'])
-        if 'height' in data:
-            update_fields.append('height = ?')
-            update_values.append(data['height'])
-        if 'leaf_count' in data:
-            update_fields.append('leaf_count = ?')
-            update_values.append(data['leaf_count'])
-        if 'stem_thickness' in data:
-            update_fields.append('stem_thickness = ?')
-            update_values.append(data['stem_thickness'])
-        if 'canopy_width' in data:
-            update_fields.append('canopy_width = ?')
-            update_values.append(data['canopy_width'])
-        if 'leaf_color' in data:
-            update_fields.append('leaf_color = ?')
-            update_values.append(data['leaf_color'])
-        if 'leaf_firmness' in data:
-            update_fields.append('leaf_firmness = ?')
-            update_values.append(data['leaf_firmness'])
-        if 'notes' in data:
-            update_fields.append('notes = ?')
-            update_values.append(data['notes'])
-        if 'fertilized' in data:
-            update_fields.append('fertilized = ?')
-            update_values.append(1 if data['fertilized'] else 0)
-        if 'pruned' in data:
-            update_fields.append('pruned = ?')
-            update_values.append(1 if data['pruned'] else 0)
+    elif request.method == 'DELETE':
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
             
-        if not update_fields:
-            return jsonify({'error': 'No fields to update'}), 400
+            # Check if measurement exists
+            cursor.execute('SELECT id FROM plant_measurements WHERE id = ?', (measurement_id,))
+            if not cursor.fetchone():
+                return jsonify({'error': 'Measurement not found'}), 404
+                
+            # Delete the measurement
+            cursor.execute('DELETE FROM plant_measurements WHERE id = ?', (measurement_id,))
+            conn.commit()
+            conn.close()
             
-        # Add measurement_id to values for WHERE clause
-        update_values.append(measurement_id)
-        
-        # Construct and execute update query
-        query = f'''
-            UPDATE plant_measurements 
-            SET {', '.join(update_fields)}
-            WHERE id = ?
-        '''
-        
-        cursor.execute(query, update_values)
-        conn.commit()
-        
-        # Return updated measurement
-        cursor.execute('SELECT * FROM plant_measurements WHERE id = ?', (measurement_id,))
-        updated = cursor.fetchone()
-        
-        return jsonify({
-            'id': updated[0],
-            'device_id': updated[1],
-            'timestamp': updated[2],
-            'plant_name': updated[3],
-            'height': updated[4],
-            'leaf_count': updated[5],
-            'stem_thickness': updated[6],
-            'canopy_width': updated[7],
-            'leaf_color': updated[8],
-            'leaf_firmness': updated[9],
-            'notes': updated[10],
-            'fertilized': bool(updated[11]),
-            'pruned': bool(updated[12])
-        })
-        
-    except Exception as e:
-        print(f"Error updating measurement: {str(e)}")
-        return jsonify({'error': 'Internal server error'}), 500
+            return jsonify({'status': 'success', 'message': 'Measurement deleted'}), 200
+            
+        except Exception as e:
+            print(f"Error deleting measurement: {str(e)}")
+            return jsonify({'error': 'Internal server error'}), 500
+            
+    elif request.method == 'PUT':
+        try:
+            data = request.get_json()
+            
+            # Validate required fields
+            if not data:
+                return jsonify({'error': 'No data provided'}), 400
 
-@app.route('/api/measurements/<int:measurement_id>', methods=['DELETE'])
-def delete_measurement(measurement_id):
-    """Delete a specific measurement."""
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
-        # Check if measurement exists
-        cursor.execute('SELECT id FROM plant_measurements WHERE id = ?', (measurement_id,))
-        if not cursor.fetchone():
-            return jsonify({'error': 'Measurement not found'}), 404
+            # Get the existing measurement
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM plant_measurements WHERE id = ?', (measurement_id,))
+            existing = cursor.fetchone()
             
-        # Delete the measurement
-        cursor.execute('DELETE FROM plant_measurements WHERE id = ?', (measurement_id,))
-        conn.commit()
-        conn.close()
-        
-        return jsonify({'status': 'success', 'message': 'Measurement deleted'}), 200
-        
-    except Exception as e:
-        print(f"Error deleting measurement: {str(e)}")
-        return jsonify({'error': 'Internal server error'}), 500
+            if not existing:
+                return jsonify({'error': 'Measurement not found'}), 404
+
+            # Update the measurement
+            update_fields = []
+            update_values = []
+            
+            # Only update fields that are provided
+            if 'plant_name' in data:
+                update_fields.append('plant_name = ?')
+                update_values.append(data['plant_name'])
+            if 'height' in data:
+                update_fields.append('height = ?')
+                update_values.append(data['height'])
+            if 'leaf_count' in data:
+                update_fields.append('leaf_count = ?')
+                update_values.append(data['leaf_count'])
+            if 'stem_thickness' in data:
+                update_fields.append('stem_thickness = ?')
+                update_values.append(data['stem_thickness'])
+            if 'canopy_width' in data:
+                update_fields.append('canopy_width = ?')
+                update_values.append(data['canopy_width'])
+            if 'leaf_color' in data:
+                update_fields.append('leaf_color = ?')
+                update_values.append(data['leaf_color'])
+            if 'leaf_firmness' in data:
+                update_fields.append('leaf_firmness = ?')
+                update_values.append(data['leaf_firmness'])
+            if 'notes' in data:
+                update_fields.append('notes = ?')
+                update_values.append(data['notes'])
+            if 'fertilized' in data:
+                update_fields.append('fertilized = ?')
+                update_values.append(1 if data['fertilized'] else 0)
+            if 'pruned' in data:
+                update_fields.append('pruned = ?')
+                update_values.append(1 if data['pruned'] else 0)
+                
+            if not update_fields:
+                return jsonify({'error': 'No fields to update'}), 400
+                
+            # Add measurement_id to values for WHERE clause
+            update_values.append(measurement_id)
+            
+            # Construct and execute update query
+            query = f'''
+                UPDATE plant_measurements 
+                SET {', '.join(update_fields)}
+                WHERE id = ?
+            '''
+            
+            cursor.execute(query, update_values)
+            conn.commit()
+            
+            # Return updated measurement
+            cursor.execute('SELECT * FROM plant_measurements WHERE id = ?', (measurement_id,))
+            updated = cursor.fetchone()
+            
+            return jsonify({
+                'id': updated[0],
+                'device_id': updated[1],
+                'timestamp': updated[2],
+                'plant_name': updated[3],
+                'height': updated[4],
+                'leaf_count': updated[5],
+                'stem_thickness': updated[6],
+                'canopy_width': updated[7],
+                'leaf_color': updated[8],
+                'leaf_firmness': updated[9],
+                'notes': updated[10],
+                'fertilized': bool(updated[11]),
+                'pruned': bool(updated[12])
+            })
+            
+        except Exception as e:
+            print(f"Error updating measurement: {str(e)}")
+            return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/api/measurements/<int:measurement_id>/photos', methods=['POST'])
 def upload_photo(measurement_id):
