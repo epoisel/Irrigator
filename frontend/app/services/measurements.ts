@@ -197,4 +197,14 @@ export const deletePhoto = async (photoId: number) => {
         console.error('Error deleting photo:', error);
         throw error;
     }
+};
+
+export const deletePlant = async (deviceId: string, plantName: string) => {
+    try {
+        const response = await api.delete(`/api/plants/${deviceId}/${encodeURIComponent(plantName)}`);
+        return response.data;
+    } catch (error) {
+        console.error('Error deleting plant:', error);
+        throw error;
+    }
 }; 

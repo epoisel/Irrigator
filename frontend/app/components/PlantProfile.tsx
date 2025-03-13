@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { PlantMeasurement, PlantPhoto, getMeasurements, updateMeasurement, deleteMeasurement, uploadPhoto, getPhotos, getPhotoUrl, deletePhoto } from '../services/measurements';
+import { PlantMeasurement, PlantPhoto, getMeasurements, updateMeasurement, deleteMeasurement, uploadPhoto, getPhotos, getPhotoUrl, deletePhoto, deletePlant } from '../services/measurements';
 import { Line } from 'react-chartjs-2';
 import Image from 'next/image';
 import {
@@ -54,6 +54,7 @@ const PlantProfile: React.FC<Props> = ({ deviceId, plantName, isOpen, onClose })
     const [summary, setSummary] = useState<PlantSummary | null>(null);
     const [selectedPhoto, setSelectedPhoto] = useState<PlantPhoto | null>(null);
     const [uploadingPhoto, setUploadingPhoto] = useState(false);
+    const [deletingPlant, setDeletingPlant] = useState(false);
 
     useEffect(() => {
         if (isOpen) {
@@ -222,6 +223,22 @@ const PlantProfile: React.FC<Props> = ({ deviceId, plantName, isOpen, onClose })
         }
     };
 
+    const handleDeletePlant = async () => {
+        try {
+            setError(null);
+            setLoading(true);
+            await deletePlant(deviceId, plantName);
+            setDeletingPlant(false);
+            onClose(); // Close the profile after successful deletion
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : 'Failed to delete plant profile';
+            setError(errorMessage);
+            console.error('Delete plant error:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const chartData = {
         labels: measurements.map(m => new Date(m.timestamp!).toLocaleDateString()),
         datasets: [
@@ -244,7 +261,16 @@ const PlantProfile: React.FC<Props> = ({ deviceId, plantName, isOpen, onClose })
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent className="max-w-4xl" aria-describedby="plant-profile-description">
                 <DialogHeader>
-                    <DialogTitle>{plantName} - Plant Profile</DialogTitle>
+                    <DialogTitle className="flex justify-between items-center">
+                        <span>{plantName} - Plant Profile</span>
+                        <Button
+                            variant="destructive"
+                            onClick={() => setDeletingPlant(true)}
+                            className="ml-4"
+                        >
+                            Delete Plant
+                        </Button>
+                    </DialogTitle>
                 </DialogHeader>
                 
                 <div id="plant-profile-description" className="sr-only">
@@ -559,6 +585,27 @@ const PlantProfile: React.FC<Props> = ({ deviceId, plantName, isOpen, onClose })
                                     className="bg-red-600 hover:bg-red-700 text-white"
                                 >
                                     Delete
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+
+                    {/* Delete Plant Confirmation Dialog */}
+                    <AlertDialog open={deletingPlant} onOpenChange={setDeletingPlant}>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Delete Plant Profile</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    Are you sure you want to delete {plantName}? This will permanently delete all measurements and photos for this plant. This action cannot be undone.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                    onClick={handleDeletePlant}
+                                    className="bg-red-600 hover:bg-red-700 text-white"
+                                >
+                                    Delete Plant
                                 </AlertDialogAction>
                             </AlertDialogFooter>
                         </AlertDialogContent>

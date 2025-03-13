@@ -817,5 +817,56 @@ def delete_photo(photo_id):
         print(f"Error deleting photo: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
 
+@app.route('/api/plants/<device_id>/<plant_name>', methods=['DELETE', 'OPTIONS'])
+def delete_plant(device_id, plant_name):
+    """Delete all measurements for a specific plant."""
+    if request.method == 'OPTIONS':
+        return '', 204
+        
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Get all measurements for this plant
+        cursor.execute('''
+            SELECT id FROM plant_measurements 
+            WHERE device_id = ? AND plant_name = ?
+        ''', (device_id, plant_name))
+        measurements = cursor.fetchall()
+        
+        # Delete photos for each measurement
+        for measurement in measurements:
+            measurement_id = measurement[0]
+            cursor.execute('SELECT file_path FROM plant_photos WHERE measurement_id = ?', (measurement_id,))
+            photos = cursor.fetchall()
+            
+            # Delete photo files
+            for photo in photos:
+                try:
+                    if os.path.exists(photo[0]):
+                        os.remove(photo[0])
+                except Exception as e:
+                    print(f"Error deleting photo file: {str(e)}")
+        
+        # Delete all measurements for this plant (cascade delete will handle photos)
+        cursor.execute('''
+            DELETE FROM plant_measurements 
+            WHERE device_id = ? AND plant_name = ?
+        ''', (device_id, plant_name))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'Plant profile {plant_name} deleted successfully'
+        }), 200
+        
+    except Exception as e:
+        print(f"Error deleting plant profile: {str(e)}")
+        if 'conn' in locals():
+            conn.close()
+        return jsonify({'error': 'Internal server error'}), 500
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False) 
