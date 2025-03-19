@@ -4,9 +4,10 @@ After=network.target
 
 [Service]
 User=epois
+Group=epois
 WorkingDirectory=/home/epois/pico_irrigator
 Environment="PATH=/home/epois/pico_irrigator/venv/bin"
-ExecStart=/home/epois/pico_irrigator/venv/bin/gunicorn --bind 0.0.0.0:5000 app:app
+ExecStart=/home/epois/pico_irrigator/venv/bin/gunicorn --bind 0.0.0.0:5000 --log-level debug app:app
 Restart=always
 RestartSec=5
 

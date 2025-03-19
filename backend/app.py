@@ -41,6 +41,7 @@ def after_request(response):
 
 # Database setup
 DB_PATH = os.path.join(os.path.dirname(__file__), 'irrigation.db')
+app.logger.info(f"Using database at: {os.path.abspath(DB_PATH)}")
 
 # Device command queue
 device_commands = {}
@@ -1117,10 +1118,12 @@ def manage_zone(zone_id):
 def manage_zone_plants(zone_id):
     """Manage plants within a zone."""
     try:
+        app.logger.info(f"Handling {request.method} request to /api/zones/{zone_id}/plants")
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         
         if request.method == 'GET':
+            app.logger.info(f"Fetching plants for zone {zone_id}")
             cursor.execute('SELECT * FROM plants WHERE zone_id = ?', (zone_id,))
             plants = cursor.fetchall()
             
@@ -1138,13 +1141,23 @@ def manage_zone_plants(zone_id):
                 'updated_at': plant[10]
             } for plant in plants]
             
+            app.logger.info(f"Found {len(plants)} plants")
             return jsonify(result), 200
             
         elif request.method == 'POST':
             data = request.json
+            app.logger.info(f"Creating new plant in zone {zone_id} with data: {data}")
+            
             required_fields = ['name', 'species', 'planting_date', 'position_x', 'position_y']
             if not all(field in data for field in required_fields):
+                app.logger.error("Missing required fields in plant creation request")
                 return jsonify({'error': 'Missing required fields'}), 400
+            
+            # First check if the plants table exists
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='plants'")
+            if not cursor.fetchone():
+                app.logger.error("Plants table does not exist!")
+                return jsonify({'error': 'Plants table not initialized'}), 500
             
             cursor.execute('''
                 INSERT INTO plants (
@@ -1164,6 +1177,7 @@ def manage_zone_plants(zone_id):
             ))
             
             plant_id = cursor.lastrowid
+            app.logger.info(f"Created plant with ID: {plant_id}")
             
             # Add planting event to history
             cursor.execute('''
@@ -1201,6 +1215,7 @@ def manage_zone_plants(zone_id):
             return jsonify(result), 201
             
     except Exception as e:
+        app.logger.error(f"Error in manage_zone_plants: {str(e)}")
         if 'conn' in locals():
             conn.close()
         return jsonify({'error': str(e)}), 500
