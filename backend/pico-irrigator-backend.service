@@ -3,10 +3,10 @@ Description=Pico Irrigator Backend Service
 After=network.target
 
 [Service]
-User=pi
-WorkingDirectory=/home/pi/pico_irrigator/backend
-Environment="PATH=/home/pi/pico_irrigator/backend/venv/bin"
-ExecStart=/home/pi/pico_irrigator/backend/venv/bin/gunicorn -c gunicorn.conf.py app:app
+User=epois
+WorkingDirectory=/home/epois/pico_irrigator
+Environment="PATH=/home/epois/pico_irrigator/venv/bin"
+ExecStart=/home/epois/pico_irrigator/venv/bin/gunicorn --bind 0.0.0.0:5000 app:app
 Restart=always
 RestartSec=5
 

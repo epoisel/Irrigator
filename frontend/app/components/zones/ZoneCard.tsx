@@ -3,12 +3,13 @@
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Edit2, Trash2, Plant } from 'lucide-react';
+import { Edit2, Trash2, Flower2 } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Zone, deleteZone } from '@/app/services/api';
+import { Zone, deleteZone, Plant as PlantType, deletePlant } from '@/app/services/api';
 import { ZoneEditDialog } from './ZoneEditDialog';
 import { PlantDialog } from './PlantDialog';
+import { PlantList } from './PlantList';
 
 interface ZoneCardProps {
   zone: Zone;
@@ -18,6 +19,7 @@ interface ZoneCardProps {
 export function ZoneCard({ zone, onUpdate }: ZoneCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isAddingPlant, setIsAddingPlant] = useState(false);
+  const [selectedPlant, setSelectedPlant] = useState<PlantType | null>(null);
   const { toast } = useToast();
 
   const handleDelete = async () => {
@@ -37,6 +39,28 @@ export function ZoneCard({ zone, onUpdate }: ZoneCardProps) {
     }
   };
 
+  const handleDeletePlant = async (plantId: number) => {
+    try {
+      await deletePlant(zone.id, plantId);
+      toast({
+        title: 'Success',
+        description: 'Plant deleted successfully',
+      });
+      onUpdate();
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to delete plant',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleEditPlant = (plant: PlantType) => {
+    setSelectedPlant(plant);
+    setIsAddingPlant(true);
+  };
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -45,9 +69,12 @@ export function ZoneCard({ zone, onUpdate }: ZoneCardProps) {
           <Button
             variant="outline"
             size="icon"
-            onClick={() => setIsAddingPlant(true)}
+            onClick={() => {
+              setSelectedPlant(null);
+              setIsAddingPlant(true);
+            }}
           >
-            <Plant className="h-4 w-4" />
+            <Flower2 className="h-4 w-4" />
           </Button>
           <Button
             variant="outline"
@@ -92,6 +119,14 @@ export function ZoneCard({ zone, onUpdate }: ZoneCardProps) {
               Device ID: {zone.device_id}
             </div>
           )}
+
+          {zone.plants && (
+            <PlantList
+              plants={zone.plants}
+              onDelete={handleDeletePlant}
+              onEdit={handleEditPlant}
+            />
+          )}
         </div>
       </CardContent>
 
@@ -107,6 +142,7 @@ export function ZoneCard({ zone, onUpdate }: ZoneCardProps) {
         open={isAddingPlant}
         onOpenChange={setIsAddingPlant}
         onPlantAdded={onUpdate}
+        plant={selectedPlant}
       />
     </Card>
   );

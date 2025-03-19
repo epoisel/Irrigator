@@ -232,7 +232,7 @@ export const fetchZoneDetails = async (zoneId: number): Promise<Zone> => {
 };
 
 export const createPlant = async (zoneId: number, data: CreatePlantData): Promise<Plant> => {
-  const response = await fetch(`${API_BASE_URL}/zones/${zoneId}/plants`, {
+  const response = await fetch(`${API_BASE_URL}/api/zones/${zoneId}/plants`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -245,8 +245,31 @@ export const createPlant = async (zoneId: number, data: CreatePlantData): Promis
   return response.json();
 };
 
+export const updatePlant = async (zoneId: number, plantId: number, data: CreatePlantData): Promise<Plant> => {
+  const response = await fetch(`${API_BASE_URL}/api/zones/${zoneId}/plants/${plantId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to update plant');
+  }
+  return response.json();
+};
+
+export const deletePlant = async (zoneId: number, plantId: number): Promise<void> => {
+  const response = await fetch(`${API_BASE_URL}/api/zones/${zoneId}/plants/${plantId}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) {
+    throw new Error('Failed to delete plant');
+  }
+};
+
 export const fetchZoneHistory = async (zoneId: number): Promise<any[]> => {
-  const response = await fetch(`${API_BASE_URL}/zones/${zoneId}/history`);
+  const response = await fetch(`${API_BASE_URL}/api/zones/${zoneId}/history`);
   if (!response.ok) {
     throw new Error('Failed to fetch zone history');
   }
@@ -254,7 +277,7 @@ export const fetchZoneHistory = async (zoneId: number): Promise<any[]> => {
 };
 
 export const addZoneEvent = async (zoneId: number, data: { event_type: string; event_description: string; plant_id?: number }): Promise<void> => {
-  const response = await fetch(`${API_BASE_URL}/zones/${zoneId}/history`, {
+  const response = await fetch(`${API_BASE_URL}/api/zones/${zoneId}/history`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

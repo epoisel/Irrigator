@@ -1,19 +1,20 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
-import { createPlant } from '@/app/services/api';
+import { createPlant, Plant, updatePlant } from '@/app/services/api';
 
 interface PlantDialogProps {
   zoneId: number;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onPlantAdded: () => void;
+  plant?: Plant | null;
 }
 
 export function PlantDialog({
@@ -21,6 +22,7 @@ export function PlantDialog({
   open,
   onOpenChange,
   onPlantAdded,
+  plant,
 }: PlantDialogProps) {
   const [formData, setFormData] = useState({
     name: '',
@@ -34,26 +36,18 @@ export function PlantDialog({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-
-    try {
-      await createPlant(zoneId, {
-        name: formData.name,
-        species: formData.species,
-        planting_date: formData.planting_date,
-        position_x: Number(formData.position_x),
-        position_y: Number(formData.position_y),
-        notes: formData.notes || undefined,
-        water_requirements: formData.water_requirements || undefined,
+  useEffect(() => {
+    if (open && plant) {
+      setFormData({
+        name: plant.name,
+        species: plant.species,
+        planting_date: plant.planting_date,
+        position_x: String(plant.position_x),
+        position_y: String(plant.position_y),
+        notes: plant.notes || '',
+        water_requirements: plant.water_requirements || '',
       });
-
-      toast({
-        title: 'Success',
-        description: 'Plant added successfully',
-      });
-
+    } else if (open) {
       setFormData({
         name: '',
         species: '',
@@ -63,13 +57,44 @@ export function PlantDialog({
         notes: '',
         water_requirements: '',
       });
+    }
+  }, [open, plant]);
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      const plantData = {
+        name: formData.name,
+        species: formData.species,
+        planting_date: formData.planting_date,
+        position_x: Number(formData.position_x),
+        position_y: Number(formData.position_y),
+        notes: formData.notes || undefined,
+        water_requirements: formData.water_requirements || undefined,
+      };
+
+      if (plant) {
+        await updatePlant(zoneId, plant.id, plantData);
+        toast({
+          title: 'Success',
+          description: 'Plant updated successfully',
+        });
+      } else {
+        await createPlant(zoneId, plantData);
+        toast({
+          title: 'Success',
+          description: 'Plant added successfully',
+        });
+      }
 
       onPlantAdded();
       onOpenChange(false);
     } catch (error) {
       toast({
         title: 'Error',
-        description: 'Failed to add plant',
+        description: plant ? 'Failed to update plant' : 'Failed to add plant',
         variant: 'destructive',
       });
     } finally {
@@ -81,7 +106,7 @@ export function PlantDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add New Plant</DialogTitle>
+          <DialogTitle>{plant ? 'Edit Plant' : 'Add New Plant'}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
@@ -182,7 +207,7 @@ export function PlantDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? 'Adding...' : 'Add Plant'}
+              {isSubmitting ? (plant ? 'Saving...' : 'Adding...') : (plant ? 'Save Changes' : 'Add Plant')}
             </Button>
           </DialogFooter>
         </form>

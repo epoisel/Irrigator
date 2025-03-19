@@ -1223,5 +1223,108 @@ def zone_history(zone_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/zones/<int:zone_id>/plants/<int:plant_id>', methods=['PUT', 'DELETE'])
+def manage_plant(zone_id, plant_id):
+    """Manage a specific plant."""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Check if plant exists and belongs to the zone
+        cursor.execute(
+            'SELECT id FROM plants WHERE id = ? AND zone_id = ?',
+            (plant_id, zone_id)
+        )
+        if not cursor.fetchone():
+            conn.close()
+            return jsonify({'error': 'Plant not found'}), 404
+        
+        if request.method == 'PUT':
+            data = request.json
+            required_fields = ['name', 'species', 'planting_date', 'position_x', 'position_y']
+            if not all(field in data for field in required_fields):
+                return jsonify({'error': 'Missing required fields'}), 400
+            
+            cursor.execute('''
+                UPDATE plants 
+                SET name = ?, species = ?, planting_date = ?, 
+                    position_x = ?, position_y = ?, notes = ?, 
+                    water_requirements = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND zone_id = ?
+            ''', (
+                data['name'],
+                data['species'],
+                data['planting_date'],
+                data['position_x'],
+                data['position_y'],
+                data.get('notes'),
+                data.get('water_requirements'),
+                plant_id,
+                zone_id
+            ))
+            
+            # Add update event to history
+            cursor.execute('''
+                INSERT INTO zone_history (
+                    zone_id, plant_id, event_type, event_description
+                )
+                VALUES (?, ?, ?, ?)
+            ''', (
+                zone_id,
+                plant_id,
+                'update',
+                f"Updated {data['species']} ({data['name']})"
+            ))
+            
+            conn.commit()
+            
+            # Return updated plant
+            cursor.execute('SELECT * FROM plants WHERE id = ?', (plant_id,))
+            plant = cursor.fetchone()
+            result = {
+                'id': plant[0],
+                'zone_id': plant[1],
+                'name': plant[2],
+                'species': plant[3],
+                'planting_date': plant[4],
+                'position_x': plant[5],
+                'position_y': plant[6],
+                'notes': plant[7],
+                'water_requirements': plant[8],
+                'created_at': plant[9],
+                'updated_at': plant[10]
+            }
+            
+            conn.close()
+            return jsonify(result), 200
+            
+        elif request.method == 'DELETE':
+            # Add deletion event to history
+            cursor.execute('SELECT name, species FROM plants WHERE id = ?', (plant_id,))
+            plant = cursor.fetchone()
+            if plant:
+                cursor.execute('''
+                    INSERT INTO zone_history (
+                        zone_id, plant_id, event_type, event_description
+                    )
+                    VALUES (?, ?, ?, ?)
+                ''', (
+                    zone_id,
+                    plant_id,
+                    'deletion',
+                    f"Removed {plant[1]} ({plant[0]})"
+                ))
+            
+            # Delete the plant
+            cursor.execute('DELETE FROM plants WHERE id = ? AND zone_id = ?', (plant_id, zone_id))
+            conn.commit()
+            conn.close()
+            return jsonify({'status': 'success'}), 200
+            
+    except Exception as e:
+        if 'conn' in locals():
+            conn.close()
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False) 
