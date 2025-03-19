@@ -6,7 +6,9 @@ After=network.target
 User=pi
 WorkingDirectory=/home/pi/pico_irrigator/backend
 Environment="PATH=/home/pi/pico_irrigator/backend/venv/bin"
-ExecStart=/home/pi/pico_irrigator/backend/venv/bin/python app.py
+ExecStart=/home/pi/pico_irrigator/backend/venv/bin/gunicorn -c gunicorn.conf.py app:app
+Restart=always
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target 

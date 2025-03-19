@@ -33,6 +33,14 @@ def after_request(response):
 # Database setup
 DB_PATH = os.path.join(os.path.dirname(__file__), 'irrigation.db')
 
+# Device command queue
+device_commands = {}
+
+# Watering state tracking
+last_watering_times = {}
+daily_cycles = {}
+last_cycle_reset = {}
+
 # Photo upload configuration
 UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
@@ -48,11 +56,6 @@ def allowed_file(filename):
 WICKING_WAIT_TIME = 60 * 60  # 60 minutes in seconds
 WATERING_DURATION = 5 * 60   # 5 minutes in seconds
 MAX_DAILY_CYCLES = 4         # Maximum watering cycles per day
-
-# Global state tracking
-last_watering_times = {}     # Track last watering time per device
-daily_cycles = {}            # Track daily watering cycles per device
-last_cycle_reset = {}        # Track when we last reset daily cycles
 
 def init_db():
     """Initialize the database with required tables if they don't exist."""
@@ -132,9 +135,6 @@ def init_db():
 # Initialize database
 init_db()
 
-# Device command queue
-device_commands = {}
-
 def can_water_device(device_id, current_time=None):
     """Check if it's safe to water the device based on timing rules."""
     if current_time is None:
@@ -182,6 +182,13 @@ def receive_sensor_data():
         moisture = float(data['moisture'])
         raw_adc_value = data.get('raw_adc_value')  # New field for ADC value
         
+        # Initialize watering state for new devices
+        current_time = time.time()
+        if device_id not in last_watering_times:
+            last_watering_times[device_id] = current_time - WICKING_WAIT_TIME  # Allow immediate watering
+            daily_cycles[device_id] = 0
+            last_cycle_reset[device_id] = current_time
+        
         # Store in database
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
@@ -197,6 +204,7 @@ def receive_sensor_data():
         
         return jsonify({'status': 'success'}), 200
     except Exception as e:
+        print(f"Error in receive_sensor_data: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/commands/<device_id>', methods=['GET'])

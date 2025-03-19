@@ -181,7 +181,9 @@ def send_data_to_server(moisture):
             "raw_adc_value": adc_value
         }
         
-        print(f"Sending data: {data}")
+        print("\nSending data to server:")
+        print(f"URL: {config.SERVER_URL}/api/sensor-data")
+        print(f"Data: {data}")
         
         response = urequests.post(
             f"{config.SERVER_URL}/api/sensor-data",
@@ -189,18 +191,22 @@ def send_data_to_server(moisture):
             json=data
         )
         
-        print(f"Server response: {response.status_code}")
+        print(f"Server response code: {response.status_code}")
+        print(f"Server response: {response.text}")
         response.close()
         
         if response.status_code == 200:
+            print("Data sent successfully!")
             blink_success()  # Indicate successful send
             return True
         else:
+            print(f"Server error: {response.status_code}")
             blink_error()  # Indicate failed send
             return False
             
     except Exception as e:
         print(f"Error sending data: {e}")
+        print("Network or server might be unreachable")
         blink_error()
         return False
 
