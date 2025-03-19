@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Edit2, Trash2, Flower2 } from 'lucide-react';
-import { useToast } from '@/components/ui/use-toast';
+import { toast } from 'sonner';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Zone, deleteZone, Plant as PlantType, deletePlant } from '@/app/services/api';
 import { ZoneEditDialog } from './ZoneEditDialog';
@@ -20,39 +20,24 @@ export function ZoneCard({ zone, onUpdate }: ZoneCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isAddingPlant, setIsAddingPlant] = useState(false);
   const [selectedPlant, setSelectedPlant] = useState<PlantType | null>(null);
-  const { toast } = useToast();
 
   const handleDelete = async () => {
     try {
       await deleteZone(zone.id);
-      toast({
-        title: 'Success',
-        description: 'Zone deleted successfully',
-      });
+      toast.success('Zone deleted successfully');
       onUpdate();
     } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to delete zone',
-        variant: 'destructive',
-      });
+      toast.error('Failed to delete zone');
     }
   };
 
   const handleDeletePlant = async (plantId: number) => {
     try {
       await deletePlant(zone.id, plantId);
-      toast({
-        title: 'Success',
-        description: 'Plant deleted successfully',
-      });
+      toast.success('Plant deleted successfully');
       onUpdate();
     } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to delete plant',
-        variant: 'destructive',
-      });
+      toast.error('Failed to delete plant');
     }
   };
 

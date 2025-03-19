@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { useToast } from '@/components/ui/use-toast';
+import { toast } from 'sonner';
 import { createPlant, Plant, updatePlant } from '@/app/services/api';
 
 interface PlantDialogProps {
@@ -34,7 +34,6 @@ export function PlantDialog({
     water_requirements: '',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { toast } = useToast();
 
   useEffect(() => {
     if (open && plant) {
@@ -77,26 +76,16 @@ export function PlantDialog({
 
       if (plant) {
         await updatePlant(zoneId, plant.id, plantData);
-        toast({
-          title: 'Success',
-          description: 'Plant updated successfully',
-        });
+        toast.success('Plant updated successfully');
       } else {
         await createPlant(zoneId, plantData);
-        toast({
-          title: 'Success',
-          description: 'Plant added successfully',
-        });
+        toast.success('Plant added successfully');
       }
 
       onPlantAdded();
       onOpenChange(false);
     } catch (error) {
-      toast({
-        title: 'Error',
-        description: plant ? 'Failed to update plant' : 'Failed to add plant',
-        variant: 'destructive',
-      });
+      toast.error(plant ? 'Failed to update plant' : 'Failed to add plant');
     } finally {
       setIsSubmitting(false);
     }

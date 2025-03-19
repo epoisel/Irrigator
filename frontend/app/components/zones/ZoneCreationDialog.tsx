@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { useToast } from '@/components/ui/use-toast';
+import { toast } from 'sonner';
 import { createZone } from '@/app/services/api';
 
 interface ZoneCreationDialogProps {
@@ -28,7 +28,6 @@ export function ZoneCreationDialog({
     length: '',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -43,10 +42,7 @@ export function ZoneCreationDialog({
         length: Number(formData.length),
       });
 
-      toast({
-        title: 'Success',
-        description: 'Zone created successfully',
-      });
+      toast.success('Zone created successfully');
 
       setFormData({
         name: '',
@@ -59,11 +55,7 @@ export function ZoneCreationDialog({
       onZoneCreated();
       onOpenChange(false);
     } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to create zone',
-        variant: 'destructive',
-      });
+      toast.error('Failed to create zone');
     } finally {
       setIsSubmitting(false);
     }
