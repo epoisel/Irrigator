@@ -6,6 +6,8 @@ import datetime
 import time
 import threading
 from werkzeug.utils import secure_filename
+import logging
+from logging.handlers import RotatingFileHandler
 
 
 app = Flask(__name__)
@@ -19,6 +21,13 @@ CORS(app, resources={
         "max_age": 86400
     }
 })
+
+# Setup logging
+log_file = os.path.join(os.path.dirname(__file__), 'app.log')
+handler = RotatingFileHandler(log_file, maxBytes=10000, backupCount=1)
+handler.setLevel(logging.INFO)
+app.logger.addHandler(handler)
+app.logger.setLevel(logging.INFO)
 
 # Add OPTIONS handler for preflight requests
 @app.after_request
@@ -957,19 +966,19 @@ def delete_plant(device_id, plant_name):
 def get_zones():
     """Get all garden zones."""
     try:
-        print("\nHandling GET request to /api/zones")  # Debug log
+        app.logger.info("Handling GET request to /api/zones")
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         
         # First check if the zones table exists
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='zones'")
         if not cursor.fetchone():
-            print("Zones table does not exist!")  # Debug log
+            app.logger.error("Zones table does not exist!")
             return jsonify({'error': 'Zones table not initialized'}), 500
             
         cursor.execute('SELECT * FROM zones ORDER BY created_at DESC')
         zones = cursor.fetchall()
-        print(f"Found {len(zones)} zones")  # Debug log
+        app.logger.info(f"Found {len(zones)} zones")
         
         result = [{
             'id': zone[0],
@@ -985,7 +994,7 @@ def get_zones():
         conn.close()
         return jsonify(result), 200
     except Exception as e:
-        print(f"Error in get_zones: {str(e)}")  # Debug log
+        app.logger.error(f"Error in get_zones: {str(e)}")
         if 'conn' in locals():
             conn.close()
         return jsonify({'error': str(e)}), 500
@@ -994,13 +1003,13 @@ def get_zones():
 def create_zone():
     """Create a new garden zone."""
     try:
-        print("\nHandling POST request to /api/zones")  # Debug log
+        app.logger.info("Handling POST request to /api/zones")
         data = request.json
-        print(f"Received data: {data}")  # Debug log
+        app.logger.info(f"Received data: {data}")
         
         required_fields = ['name', 'width', 'length']
         if not all(field in data for field in required_fields):
-            print("Missing required fields")  # Debug log
+            app.logger.error("Missing required fields")
             return jsonify({'error': 'Missing required fields'}), 400
         
         conn = sqlite3.connect(DB_PATH)
@@ -1009,7 +1018,7 @@ def create_zone():
         # First check if the zones table exists
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='zones'")
         if not cursor.fetchone():
-            print("Zones table does not exist!")  # Debug log
+            app.logger.error("Zones table does not exist!")
             return jsonify({'error': 'Zones table not initialized'}), 500
         
         cursor.execute('''
@@ -1024,13 +1033,13 @@ def create_zone():
         ))
         
         zone_id = cursor.lastrowid
-        print(f"Created zone with ID: {zone_id}")  # Debug log
+        app.logger.info(f"Created zone with ID: {zone_id}")
         conn.commit()
         conn.close()
         
         return jsonify({'id': zone_id, 'status': 'success'}), 201
     except Exception as e:
-        print(f"Error in create_zone: {str(e)}")  # Debug log
+        app.logger.error(f"Error in create_zone: {str(e)}")
         if 'conn' in locals():
             conn.close()
         return jsonify({'error': str(e)}), 500
