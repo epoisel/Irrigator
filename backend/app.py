@@ -1119,11 +1119,24 @@ def manage_zone_plants(zone_id):
     """Manage plants within a zone."""
     try:
         app.logger.info(f"Handling {request.method} request to /api/zones/{zone_id}/plants")
+        
+        # First check if the database exists
+        if not os.path.exists(DB_PATH):
+            app.logger.error(f"Database file does not exist at {DB_PATH}")
+            return jsonify({'error': 'Database not initialized'}), 500
+            
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         
         if request.method == 'GET':
             app.logger.info(f"Fetching plants for zone {zone_id}")
+            
+            # Check if plants table exists
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='plants'")
+            if not cursor.fetchone():
+                app.logger.error("Plants table does not exist in database")
+                return jsonify({'error': 'Plants table not initialized'}), 500
+            
             cursor.execute('SELECT * FROM plants WHERE zone_id = ?', (zone_id,))
             plants = cursor.fetchall()
             
@@ -1150,47 +1163,62 @@ def manage_zone_plants(zone_id):
             
             required_fields = ['name', 'species', 'planting_date', 'position_x', 'position_y']
             if not all(field in data for field in required_fields):
-                app.logger.error("Missing required fields in plant creation request")
-                return jsonify({'error': 'Missing required fields'}), 400
+                missing_fields = [field for field in required_fields if field not in data]
+                app.logger.error(f"Missing required fields: {missing_fields}")
+                return jsonify({'error': f'Missing required fields: {missing_fields}'}), 400
             
-            # First check if the plants table exists
+            # Check if plants table exists
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='plants'")
             if not cursor.fetchone():
-                app.logger.error("Plants table does not exist!")
+                app.logger.error("Plants table does not exist in database")
                 return jsonify({'error': 'Plants table not initialized'}), 500
             
-            cursor.execute('''
-                INSERT INTO plants (
-                    zone_id, name, species, planting_date, 
-                    position_x, position_y, notes, water_requirements
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                zone_id,
-                data['name'],
-                data['species'],
-                data['planting_date'],
-                data['position_x'],
-                data['position_y'],
-                data.get('notes'),
-                data.get('water_requirements')
-            ))
+            # Check if zone exists
+            cursor.execute('SELECT id FROM zones WHERE id = ?', (zone_id,))
+            if not cursor.fetchone():
+                app.logger.error(f"Zone {zone_id} does not exist")
+                return jsonify({'error': 'Zone not found'}), 404
+            
+            try:
+                cursor.execute('''
+                    INSERT INTO plants (
+                        zone_id, name, species, planting_date, 
+                        position_x, position_y, notes, water_requirements
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    zone_id,
+                    data['name'],
+                    data['species'],
+                    data['planting_date'],
+                    data['position_x'],
+                    data['position_y'],
+                    data.get('notes'),
+                    data.get('water_requirements')
+                ))
+            except sqlite3.Error as e:
+                app.logger.error(f"Database error while inserting plant: {str(e)}")
+                return jsonify({'error': f'Database error: {str(e)}'}), 500
             
             plant_id = cursor.lastrowid
             app.logger.info(f"Created plant with ID: {plant_id}")
             
             # Add planting event to history
-            cursor.execute('''
-                INSERT INTO zone_history (
-                    zone_id, plant_id, event_type, event_description
-                )
-                VALUES (?, ?, ?, ?)
-            ''', (
-                zone_id,
-                plant_id,
-                'planting',
-                f"Planted {data['species']} ({data['name']})"
-            ))
+            try:
+                cursor.execute('''
+                    INSERT INTO zone_history (
+                        zone_id, plant_id, event_type, event_description
+                    )
+                    VALUES (?, ?, ?, ?)
+                ''', (
+                    zone_id,
+                    plant_id,
+                    'planting',
+                    f"Planted {data['species']} ({data['name']})"
+                ))
+            except sqlite3.Error as e:
+                app.logger.error(f"Database error while adding history event: {str(e)}")
+                # Continue even if history event fails
             
             conn.commit()
             
@@ -1215,7 +1243,7 @@ def manage_zone_plants(zone_id):
             return jsonify(result), 201
             
     except Exception as e:
-        app.logger.error(f"Error in manage_zone_plants: {str(e)}")
+        app.logger.error(f"Error in manage_zone_plants: {str(e)}", exc_info=True)
         if 'conn' in locals():
             conn.close()
         return jsonify({'error': str(e)}), 500
