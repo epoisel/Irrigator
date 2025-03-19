@@ -74,17 +74,27 @@ export default function ValveControl({ deviceId, onValveChange }: ValveControlPr
       setIsLoading(true);
       setError(null);
       
+      console.log('Current automation state:', automationEnabled);  // Debug log
+      
       // Toggle automation state
       const newState = !automationEnabled;
+      console.log('Toggling automation to:', newState);  // Debug log
       
       // Send command to API
-      await api.controlAutomation(deviceId, newState ? 1 : 0);
+      const response = await api.controlAutomation(deviceId, newState ? 1 : 0);
+      console.log('API response:', response);  // Debug log
       
       // Update local state
       setAutomationEnabled(newState);
+      
+      // Refresh automation rules to confirm state
+      const rules = await api.getAutomationRules(deviceId);
+      console.log('Updated automation rules:', rules);  // Debug log
+      setAutomationEnabled(rules.enabled === 1);
+      
     } catch (err) {
+      console.error('Automation toggle error:', err);  // Debug log
       setError('Failed to toggle automation. Please try again.');
-      console.error('Automation control error:', err);
     } finally {
       setIsLoading(false);
     }

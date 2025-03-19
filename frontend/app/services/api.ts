@@ -119,19 +119,19 @@ export const api = {
     }
   },
 
-  async controlAutomation(deviceId: string | undefined, enabled: number): Promise<void> {
-    if (!deviceId) return;
+  async controlAutomation(deviceId: string | undefined, enabled: number): Promise<{ status: string }> {
+    if (!deviceId) throw new Error('Device ID is required');
     
-    const response = await fetch(`${API_BASE_URL}/api/automation/control`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ device_id: deviceId, enabled }),
-    });
-    
-    if (!response.ok) {
-      throw new Error('Failed to control automation');
+    try {
+      const response = await axios.post(`${API_BASE_URL}/api/automation/control`, {
+        device_id: deviceId,
+        enabled
+      });
+      console.log('Automation control response:', response.data);  // Debug log
+      return response.data;
+    } catch (error) {
+      console.error('Error controlling automation:', error);
+      throw error;
     }
   },
 }; 

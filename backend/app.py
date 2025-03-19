@@ -478,11 +478,15 @@ def control_automation():
     """Endpoint to enable/disable automation."""
     try:
         data = request.json
+        print(f"\nReceived automation control request: {data}")  # Debug log
+        
         if not data or 'device_id' not in data or 'enabled' not in data:
+            print("Invalid data format")  # Debug log
             return jsonify({'error': 'Invalid data format'}), 400
         
         device_id = data['device_id']
         enabled = int(data['enabled'])  # 0 for disabled, 1 for enabled
+        print(f"Setting automation for device {device_id} to: {'enabled' if enabled else 'disabled'}")  # Debug log
         
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
@@ -494,6 +498,7 @@ def control_automation():
         )
         
         if cursor.rowcount == 0:
+            print(f"No existing rule found for device {device_id}, creating new rule")  # Debug log
             # If no rule exists, create one with default values
             cursor.execute(
                 '''INSERT INTO automation_rules 
@@ -503,10 +508,24 @@ def control_automation():
             )
         
         conn.commit()
+        
+        # Verify the change
+        cursor.execute(
+            'SELECT enabled FROM automation_rules WHERE device_id = ?',
+            (device_id,)
+        )
+        result = cursor.fetchone()
+        current_state = result[0] if result else None
+        print(f"Verified automation state: {current_state}")  # Debug log
+        
         conn.close()
         
-        return jsonify({'status': 'success'}), 200
+        return jsonify({
+            'status': 'success',
+            'enabled': current_state
+        }), 200
     except Exception as e:
+        print(f"Error in control_automation: {str(e)}")  # Debug log
         return jsonify({'error': str(e)}), 500
 
 def automation_worker():
