@@ -14,34 +14,49 @@ from machine import ADC, Pin
 import json
 import gc
 import machine
-import config
+
+# Status LED
+led = Pin("LED", Pin.OUT)
+
+def blink_error():
+    """Blink LED rapidly to indicate error"""
+    for _ in range(5):
+        led.toggle()
+        time.sleep(0.1)
+    led.off()
+
+def blink_success():
+    """Blink LED slowly to indicate success"""
+    for _ in range(2):
+        led.toggle()
+        time.sleep(0.5)
+    led.off()
 
 # Import configuration
 try:
     import config
     print("Loaded configuration from config.py")
+    blink_success()  # Indicate config loaded
 except ImportError:
     print("Warning: config.py not found, using default configuration")
+    blink_error()
     # Default configuration
     class config:
         WIFI_SSID = "Redacted"
         WIFI_PASSWORD = "00000000"
         SERVER_URL = "http://192.168.68.65:5000"
         DEVICE_ID = "pico_01"
-        MOISTURE_PIN = 30  # AOUT connected to GPIO30
+        MOISTURE_PIN = 27  # AOUT connected to GPIO27
         VALVE_PIN = 38    # GPIO pin for MOSFET gate controlling solenoid
         CHECK_INTERVAL = 60
         RECONNECT_INTERVAL = 10
-        MOISTURE_MIN_VALUE = 20000
-        MOISTURE_MAX_VALUE = 65000
+        MOISTURE_MIN_VALUE = 10800
+        MOISTURE_MAX_VALUE = 14300
 
 # Setup hardware
-moisture_sensor = ADC(Pin(config.MOISTURE_PIN))  # AOUT on GPIO30
+moisture_sensor = ADC(Pin(config.MOISTURE_PIN))
 valve = Pin(config.VALVE_PIN, Pin.OUT)
 valve.value(0)  # Ensure valve is OFF at startup
-
-# Status LED
-led = Pin("LED", Pin.OUT)
 
 # WiFi connection
 wlan = network.WLAN(network.STA_IF)
@@ -54,6 +69,8 @@ def connect_wifi():
     # Disconnect if already connected
     if wlan.isconnected():
         print("Already connected")
+        print(f"IP address: {wlan.ifconfig()[0]}")
+        blink_success()
         return True
     
     # Connect to WiFi
@@ -65,12 +82,15 @@ def connect_wifi():
         if wlan.isconnected():
             print("Connected to WiFi")
             print(f"IP address: {wlan.ifconfig()[0]}")
+            blink_success()
             return True
         max_wait -= 1
         print("Waiting for connection...")
+        led.toggle()  # Blink while connecting
         time.sleep(1)
     
     print("Failed to connect to WiFi")
+    blink_error()
     return False
 
 def update_calibration_values(adc_value):
@@ -115,23 +135,22 @@ def update_calibration_values(adc_value):
     return False
 
 def read_moisture():
-    """Read moisture level from sensor and return percentage and raw ADC value."""
-    # Take multiple readings and average them for stability
+    """Read moisture level from sensor"""
+    # Take multiple readings and average them
     readings = []
-    for _ in range(10):  # Take 10 readings
-        # Use 12-bit reading (0-4095) instead of 16-bit (0-65535)
-        readings.append(moisture_sensor.read_u16() >> 4)  # Shift right by 4 to convert 16-bit to 12-bit
-        time.sleep_ms(100)  # Small delay between readings
+    for _ in range(10):
+        readings.append(moisture_sensor.read_u16())
+        time.sleep_ms(100)
     
-    # Remove outliers (values more than 2 standard deviations from mean)
+    # Remove outliers
     mean = sum(readings) / len(readings)
     std_dev = (sum((x - mean) ** 2 for x in readings) / len(readings)) ** 0.5
-    filtered_readings = [x for x in readings if abs(x - mean) <= 2 * std_dev]
+    filtered = [x for x in readings if abs(x - mean) <= 2 * std_dev]
     
-    if not filtered_readings:  # If all readings were outliers, use original mean
-        adc_value = int(round(mean))  # Round to nearest integer
+    if not filtered:
+        adc_value = int(mean)
     else:
-        adc_value = int(round(sum(filtered_readings) / len(filtered_readings)))  # Round to nearest integer
+        adc_value = int(sum(filtered) / len(filtered))
     
     # Print both 12-bit ADC value and approximate voltage
     voltage = (adc_value * 3.3) / 4095
@@ -141,12 +160,10 @@ def read_moisture():
     if update_calibration_values(adc_value):
         print(f"New calibration - MIN: {config.MOISTURE_MIN_VALUE}, MAX: {config.MOISTURE_MAX_VALUE}")
     
-    # Convert to percentage (0-100)
-    # Note: ADC value is inverted (higher value = drier soil)
+    # Convert to percentage
     moisture_percentage = ((config.MOISTURE_MAX_VALUE - adc_value) / 
                          (config.MOISTURE_MAX_VALUE - config.MOISTURE_MIN_VALUE)) * 100
     
-    # Clamp to 0-100 range
     return max(0, min(100, moisture_percentage)), adc_value
 
 def control_valve(state):
@@ -157,7 +174,7 @@ def control_valve(state):
 def send_data_to_server(moisture):
     """Send moisture data to server"""
     try:
-        moisture_pct, adc_value = moisture  # Now moisture is a tuple (percentage, raw_adc)
+        moisture_pct, adc_value = moisture
         data = {
             "device_id": config.DEVICE_ID,
             "moisture": moisture_pct,
@@ -174,9 +191,17 @@ def send_data_to_server(moisture):
         
         print(f"Server response: {response.status_code}")
         response.close()
-        return response.status_code == 200
+        
+        if response.status_code == 200:
+            blink_success()  # Indicate successful send
+            return True
+        else:
+            blink_error()  # Indicate failed send
+            return False
+            
     except Exception as e:
         print(f"Error sending data: {e}")
+        blink_error()
         return False
 
 def check_commands():
@@ -212,10 +237,12 @@ def blink_led(times=1, delay=0.2):
 def main():
     """Main program loop"""
     print(f"Starting irrigation controller - Device ID: {config.DEVICE_ID}")
+    print(f"Server URL: {config.SERVER_URL}")
     
     # Initial connection
     if not connect_wifi():
         print("Initial WiFi connection failed. Will retry in main loop.")
+        blink_error()
     
     last_reading_time = 0
     
@@ -224,24 +251,21 @@ def main():
             # Check WiFi connection
             if not wlan.isconnected():
                 print("WiFi disconnected. Reconnecting...")
-                connect_wifi()
-                time.sleep(config.RECONNECT_INTERVAL)
-                continue
+                if not connect_wifi():
+                    time.sleep(config.RECONNECT_INTERVAL)
+                    continue
             
             # Check if it's time for a new reading
             current_time = time.time()
             if current_time - last_reading_time >= config.CHECK_INTERVAL:
                 # Read moisture level
-                moisture_pct, adc_value = read_moisture()
+                moisture = read_moisture()
+                moisture_pct, adc_value = moisture
                 print(f"Moisture: {moisture_pct:.1f}% (ADC: {adc_value})")
                 
-                # Blink LED to indicate activity
-                blink_led(1)
-                
                 # Send data to server
-                if send_data_to_server((moisture_pct, adc_value)):
+                if send_data_to_server(moisture):
                     last_reading_time = current_time
-                    blink_led(2)  # Double blink on successful send
                 
                 # Free memory
                 gc.collect()
@@ -254,7 +278,8 @@ def main():
             
         except Exception as e:
             print(f"Error in main loop: {e}")
-            time.sleep(10)  # Wait before retrying
+            blink_error()
+            time.sleep(10)
 
 if __name__ == "__main__":
     try:
@@ -263,5 +288,5 @@ if __name__ == "__main__":
         print("Program stopped by user")
     finally:
         # Ensure valve is OFF when program exits
-        control_valve(0)
+        valve.value(0)
         print("Valve turned OFF - System shutdown") 

@@ -480,8 +480,9 @@ def automation_worker():
         # Check every 5 minutes
         time.sleep(300)
 
-# Start automation worker in a background thread
-automation_thread = threading.Thread(target=automation_worker, daemon=True)
+# Start automation worker thread
+automation_thread = threading.Thread(target=automation_worker)
+automation_thread.daemon = True
 automation_thread.start()
 
 @app.route('/api/measurements', methods=['POST'])

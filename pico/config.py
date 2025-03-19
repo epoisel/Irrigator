@@ -14,7 +14,7 @@ SERVER_URL = "http://192.168.68.65:5000"
 DEVICE_ID = "pico_01"
 
 # Hardware Configuration
-MOISTURE_PIN = 30  # AOUT connected to GPIO30
+MOISTURE_PIN = 27  # AOUT connected to GPIO27 (ADC1)
 VALVE_PIN = 38    # GPIO pin for MOSFET gate controlling solenoid
 
 # Timing Configuration
@@ -23,8 +23,8 @@ RECONNECT_INTERVAL = 10  # Seconds between WiFi reconnection attempts
 
 # Sensor Calibration
 # Calibrated values for capacitive soil moisture sensor
-MOISTURE_MIN_VALUE = 22249  # ADC value when soil is very wet
-MOISTURE_MAX_VALUE = 40593  # ADC value when soil is very dry
+MOISTURE_MIN_VALUE = 10800  # ADC value when soil is very wet
+MOISTURE_MAX_VALUE = 14300  # ADC value when soil is very dry
 
 # Moisture interpretation guide:
 # 0-20%:   Very Dry  (around 40593)
