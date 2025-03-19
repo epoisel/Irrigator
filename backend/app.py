@@ -957,10 +957,19 @@ def delete_plant(device_id, plant_name):
 def get_zones():
     """Get all garden zones."""
     try:
+        print("\nHandling GET request to /api/zones")  # Debug log
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
+        
+        # First check if the zones table exists
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='zones'")
+        if not cursor.fetchone():
+            print("Zones table does not exist!")  # Debug log
+            return jsonify({'error': 'Zones table not initialized'}), 500
+            
         cursor.execute('SELECT * FROM zones ORDER BY created_at DESC')
         zones = cursor.fetchall()
+        print(f"Found {len(zones)} zones")  # Debug log
         
         result = [{
             'id': zone[0],
@@ -976,19 +985,32 @@ def get_zones():
         conn.close()
         return jsonify(result), 200
     except Exception as e:
+        print(f"Error in get_zones: {str(e)}")  # Debug log
+        if 'conn' in locals():
+            conn.close()
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/zones', methods=['POST'])
 def create_zone():
     """Create a new garden zone."""
     try:
+        print("\nHandling POST request to /api/zones")  # Debug log
         data = request.json
+        print(f"Received data: {data}")  # Debug log
+        
         required_fields = ['name', 'width', 'length']
         if not all(field in data for field in required_fields):
+            print("Missing required fields")  # Debug log
             return jsonify({'error': 'Missing required fields'}), 400
         
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
+        
+        # First check if the zones table exists
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='zones'")
+        if not cursor.fetchone():
+            print("Zones table does not exist!")  # Debug log
+            return jsonify({'error': 'Zones table not initialized'}), 500
         
         cursor.execute('''
             INSERT INTO zones (name, description, device_id, width, length)
@@ -1002,11 +1024,15 @@ def create_zone():
         ))
         
         zone_id = cursor.lastrowid
+        print(f"Created zone with ID: {zone_id}")  # Debug log
         conn.commit()
         conn.close()
         
         return jsonify({'id': zone_id, 'status': 'success'}), 201
     except Exception as e:
+        print(f"Error in create_zone: {str(e)}")  # Debug log
+        if 'conn' in locals():
+            conn.close()
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/zones/<int:zone_id>', methods=['GET', 'PUT', 'DELETE'])
