@@ -117,5 +117,21 @@ export const api = {
       console.error('Error setting automation rules:', error);
       throw error;
     }
-  }
+  },
+
+  async controlAutomation(deviceId: string | undefined, enabled: number): Promise<void> {
+    if (!deviceId) return;
+    
+    const response = await fetch(`${API_BASE_URL}/api/automation/control`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ device_id: deviceId, enabled }),
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to control automation');
+    }
+  },
 }; 

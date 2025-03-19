@@ -40,6 +40,7 @@ device_commands = {}
 last_watering_times = {}
 daily_cycles = {}
 last_cycle_reset = {}
+manual_override = {}  # Track manual valve overrides
 
 # Photo upload configuration
 UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads')
@@ -147,13 +148,16 @@ def can_water_device(device_id, current_time=None):
         daily_cycles[device_id] = 0
     if device_id not in last_cycle_reset:
         last_cycle_reset[device_id] = current_time
+    if device_id not in manual_override:
+        manual_override[device_id] = False
     
-    # Reset daily cycles at midnight
+    # Reset daily cycles and manual override at midnight
     current_date = datetime.datetime.fromtimestamp(current_time).date()
     last_reset_date = datetime.datetime.fromtimestamp(last_cycle_reset[device_id]).date()
     
     if current_date != last_reset_date:
         daily_cycles[device_id] = 0
+        manual_override[device_id] = False  # Reset manual override at midnight
         last_cycle_reset[device_id] = current_time
     
     # Check timing rules
@@ -226,18 +230,8 @@ def control_valve():
         device_id = data['device_id']
         state = int(data['state'])  # 0 for OFF, 1 for ON
         
-        # Store valve action in database
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute(
-            'INSERT INTO valve_actions (device_id, state) VALUES (?, ?)',
-            (device_id, state)
-        )
-        conn.commit()
-        conn.close()
-        
-        # Queue command for device
-        device_commands[device_id] = 'valve:' + str(state)
+        # Call internal function with is_manual=True
+        control_valve_internal(device_id, state, is_manual=True)
         
         return jsonify({'status': 'success'}), 200
     except Exception as e:
@@ -395,6 +389,14 @@ def set_automation_rules():
 def check_automation_rules(device_id, moisture):
     """Check automation rules and control valve if needed."""
     try:
+        print(f"\nChecking automation rules for device {device_id}")
+        print(f"Current moisture level: {moisture:.1f}%")
+        
+        # Check for manual override
+        if device_id in manual_override and manual_override[device_id]:
+            print("Manual override is active - skipping automation")
+            return
+        
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
@@ -408,35 +410,53 @@ def check_automation_rules(device_id, moisture):
         conn.close()
         
         if rule and rule['enabled']:
+            print(f"Found active automation rule:")
+            print(f"- Low threshold: {rule['low_threshold']}%")
+            print(f"- High threshold: {rule['high_threshold']}%")
+            
             current_time = time.time()
             
             if moisture <= rule['low_threshold']:
+                print(f"Moisture ({moisture:.1f}%) is below low threshold ({rule['low_threshold']}%)")
                 # Only water if timing rules allow
                 if can_water_device(device_id, current_time):
+                    print("Starting watering cycle...")
                     # Start watering cycle
-                    control_valve_internal(device_id, 1)
+                    control_valve_internal(device_id, 1, is_manual=False)
                     
                     # Schedule valve turn off after WATERING_DURATION
                     def turn_off_valve():
                         time.sleep(WATERING_DURATION)
-                        control_valve_internal(device_id, 0)
+                        print(f"Watering cycle complete for device {device_id}")
+                        control_valve_internal(device_id, 0, is_manual=False)
                         update_watering_state(device_id)
                     
                     # Start timer thread
                     timer_thread = threading.Thread(target=turn_off_valve)
                     timer_thread.daemon = True
                     timer_thread.start()
+                else:
+                    print("Cannot water due to timing rules:")
+                    print(f"- Time since last water: {(current_time - last_watering_times[device_id]) / 60:.1f} minutes")
+                    print(f"- Daily cycles used: {daily_cycles[device_id]} of {MAX_DAILY_CYCLES}")
             
             elif moisture >= rule['high_threshold']:
+                print(f"Moisture ({moisture:.1f}%) is above high threshold ({rule['high_threshold']}%)")
+                print("Turning valve OFF")
                 # Turn off valve if moisture is high enough
-                control_valve_internal(device_id, 0)
+                control_valve_internal(device_id, 0, is_manual=False)
+            else:
+                print(f"Moisture ({moisture:.1f}%) is within normal range ({rule['low_threshold']}% - {rule['high_threshold']}%)")
+        else:
+            print("No active automation rule found for this device")
     
     except Exception as e:
         print(f"Error in automation: {str(e)}")
 
-def control_valve_internal(device_id, state):
+def control_valve_internal(device_id, state, is_manual=False):
     """Internal function to control valve and log action."""
     try:
+        print(f"\nControlling valve for device {device_id}: {'ON' if state else 'OFF'} (Manual: {is_manual})")
         # Store valve action in database
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
@@ -449,8 +469,45 @@ def control_valve_internal(device_id, state):
         
         # Queue command for device
         device_commands[device_id] = 'valve:' + str(state)
+        print(f"Command queued: {device_commands[device_id]}")
     except Exception as e:
         print(f"Error controlling valve: {str(e)}")
+
+@app.route('/api/automation/control', methods=['POST'])
+def control_automation():
+    """Endpoint to enable/disable automation."""
+    try:
+        data = request.json
+        if not data or 'device_id' not in data or 'enabled' not in data:
+            return jsonify({'error': 'Invalid data format'}), 400
+        
+        device_id = data['device_id']
+        enabled = int(data['enabled'])  # 0 for disabled, 1 for enabled
+        
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Update automation state
+        cursor.execute(
+            'UPDATE automation_rules SET enabled = ? WHERE device_id = ?',
+            (enabled, device_id)
+        )
+        
+        if cursor.rowcount == 0:
+            # If no rule exists, create one with default values
+            cursor.execute(
+                '''INSERT INTO automation_rules 
+                   (device_id, enabled, low_threshold, high_threshold) 
+                   VALUES (?, ?, 30.0, 70.0)''',
+                (device_id, enabled)
+            )
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({'status': 'success'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 def automation_worker():
     """Background worker to periodically check automation rules."""
