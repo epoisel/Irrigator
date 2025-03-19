@@ -49,6 +49,52 @@ def init_db():
         high_threshold REAL NOT NULL
     )
     ''')
+
+    # Create zones table
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS zones (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        description TEXT,
+        device_id TEXT,
+        width REAL NOT NULL,
+        length REAL NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+    ''')
+
+    # Create plants table
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS plants (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        zone_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        species TEXT NOT NULL,
+        planting_date DATE NOT NULL,
+        position_x REAL NOT NULL,
+        position_y REAL NOT NULL,
+        notes TEXT,
+        water_requirements TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (zone_id) REFERENCES zones(id)
+    )
+    ''')
+
+    # Create zone_history table for tracking growth and maintenance
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS zone_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        zone_id INTEGER NOT NULL,
+        plant_id INTEGER,
+        event_type TEXT NOT NULL,
+        event_description TEXT,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (zone_id) REFERENCES zones(id),
+        FOREIGN KEY (plant_id) REFERENCES plants(id)
+    )
+    ''')
     
     conn.commit()
     conn.close()

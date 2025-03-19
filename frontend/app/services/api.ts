@@ -30,6 +30,48 @@ export interface AutomationRule {
   high_threshold: number;
 }
 
+// Zone Types
+export interface Zone {
+  id: number;
+  name: string;
+  description: string | null;
+  device_id: string | null;
+  width: number;
+  length: number;
+  created_at: string;
+  updated_at: string;
+  plants?: Plant[];
+}
+
+export interface Plant {
+  id: number;
+  name: string;
+  species: string;
+  planting_date: string;
+  position_x: number;
+  position_y: number;
+  notes: string | null;
+  water_requirements: string | null;
+}
+
+export interface CreateZoneData {
+  name: string;
+  description?: string;
+  device_id?: string;
+  width: number;
+  length: number;
+}
+
+export interface CreatePlantData {
+  name: string;
+  species: string;
+  planting_date: string;
+  position_x: number;
+  position_y: number;
+  notes?: string;
+  water_requirements?: string;
+}
+
 // API functions
 export const api = {
   /**
@@ -134,4 +176,92 @@ export const api = {
       throw error;
     }
   },
+};
+
+// Zone API Functions
+export const fetchZones = async (): Promise<Zone[]> => {
+  const response = await fetch(`${API_BASE_URL}/api/zones`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch zones');
+  }
+  return response.json();
+};
+
+export const createZone = async (data: CreateZoneData): Promise<Zone> => {
+  const response = await fetch(`${API_BASE_URL}/api/zones`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to create zone');
+  }
+  return response.json();
+};
+
+export const updateZone = async (zoneId: number, data: CreateZoneData): Promise<void> => {
+  const response = await fetch(`${API_BASE_URL}/api/zones/${zoneId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to update zone');
+  }
+};
+
+export const deleteZone = async (zoneId: number): Promise<void> => {
+  const response = await fetch(`${API_BASE_URL}/api/zones/${zoneId}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) {
+    throw new Error('Failed to delete zone');
+  }
+};
+
+export const fetchZoneDetails = async (zoneId: number): Promise<Zone> => {
+  const response = await fetch(`${API_BASE_URL}/api/zones/${zoneId}`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch zone details');
+  }
+  return response.json();
+};
+
+export const createPlant = async (zoneId: number, data: CreatePlantData): Promise<Plant> => {
+  const response = await fetch(`${API_BASE_URL}/zones/${zoneId}/plants`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to create plant');
+  }
+  return response.json();
+};
+
+export const fetchZoneHistory = async (zoneId: number): Promise<any[]> => {
+  const response = await fetch(`${API_BASE_URL}/zones/${zoneId}/history`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch zone history');
+  }
+  return response.json();
+};
+
+export const addZoneEvent = async (zoneId: number, data: { event_type: string; event_description: string; plant_id?: number }): Promise<void> => {
+  const response = await fetch(`${API_BASE_URL}/zones/${zoneId}/history`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to add zone event');
+  }
 }; 

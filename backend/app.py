@@ -953,5 +953,275 @@ def delete_plant(device_id, plant_name):
             conn.close()
         return jsonify({'error': 'Internal server error'}), 500
 
+@app.route('/api/zones', methods=['GET'])
+def get_zones():
+    """Get all garden zones."""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM zones ORDER BY created_at DESC')
+        zones = cursor.fetchall()
+        
+        result = [{
+            'id': zone[0],
+            'name': zone[1],
+            'description': zone[2],
+            'device_id': zone[3],
+            'width': zone[4],
+            'length': zone[5],
+            'created_at': zone[6],
+            'updated_at': zone[7]
+        } for zone in zones]
+        
+        conn.close()
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/zones', methods=['POST'])
+def create_zone():
+    """Create a new garden zone."""
+    try:
+        data = request.json
+        required_fields = ['name', 'width', 'length']
+        if not all(field in data for field in required_fields):
+            return jsonify({'error': 'Missing required fields'}), 400
+        
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            INSERT INTO zones (name, description, device_id, width, length)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (
+            data['name'],
+            data.get('description'),
+            data.get('device_id'),
+            data['width'],
+            data['length']
+        ))
+        
+        zone_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        
+        return jsonify({'id': zone_id, 'status': 'success'}), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/zones/<int:zone_id>', methods=['GET', 'PUT', 'DELETE'])
+def manage_zone(zone_id):
+    """Manage a specific garden zone."""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        if request.method == 'GET':
+            cursor.execute('SELECT * FROM zones WHERE id = ?', (zone_id,))
+            zone = cursor.fetchone()
+            
+            if not zone:
+                return jsonify({'error': 'Zone not found'}), 404
+            
+            result = {
+                'id': zone[0],
+                'name': zone[1],
+                'description': zone[2],
+                'device_id': zone[3],
+                'width': zone[4],
+                'length': zone[5],
+                'created_at': zone[6],
+                'updated_at': zone[7]
+            }
+            
+            # Get plants in this zone
+            cursor.execute('SELECT * FROM plants WHERE zone_id = ?', (zone_id,))
+            plants = cursor.fetchall()
+            result['plants'] = [{
+                'id': plant[0],
+                'name': plant[2],
+                'species': plant[3],
+                'planting_date': plant[4],
+                'position_x': plant[5],
+                'position_y': plant[6],
+                'notes': plant[7],
+                'water_requirements': plant[8]
+            } for plant in plants]
+            
+            return jsonify(result), 200
+            
+        elif request.method == 'PUT':
+            data = request.json
+            cursor.execute('''
+                UPDATE zones 
+                SET name = ?, description = ?, device_id = ?, width = ?, length = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            ''', (
+                data['name'],
+                data.get('description'),
+                data.get('device_id'),
+                data['width'],
+                data['length'],
+                zone_id
+            ))
+            
+        elif request.method == 'DELETE':
+            # First delete all plants in the zone
+            cursor.execute('DELETE FROM plants WHERE zone_id = ?', (zone_id,))
+            # Then delete the zone
+            cursor.execute('DELETE FROM zones WHERE id = ?', (zone_id,))
+        
+        conn.commit()
+        conn.close()
+        return jsonify({'status': 'success'}), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/zones/<int:zone_id>/plants', methods=['GET', 'POST'])
+def manage_zone_plants(zone_id):
+    """Manage plants within a zone."""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        if request.method == 'GET':
+            cursor.execute('SELECT * FROM plants WHERE zone_id = ?', (zone_id,))
+            plants = cursor.fetchall()
+            
+            result = [{
+                'id': plant[0],
+                'zone_id': plant[1],
+                'name': plant[2],
+                'species': plant[3],
+                'planting_date': plant[4],
+                'position_x': plant[5],
+                'position_y': plant[6],
+                'notes': plant[7],
+                'water_requirements': plant[8],
+                'created_at': plant[9],
+                'updated_at': plant[10]
+            } for plant in plants]
+            
+            return jsonify(result), 200
+            
+        elif request.method == 'POST':
+            data = request.json
+            required_fields = ['name', 'species', 'planting_date', 'position_x', 'position_y']
+            if not all(field in data for field in required_fields):
+                return jsonify({'error': 'Missing required fields'}), 400
+            
+            cursor.execute('''
+                INSERT INTO plants (
+                    zone_id, name, species, planting_date, 
+                    position_x, position_y, notes, water_requirements
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                zone_id,
+                data['name'],
+                data['species'],
+                data['planting_date'],
+                data['position_x'],
+                data['position_y'],
+                data.get('notes'),
+                data.get('water_requirements')
+            ))
+            
+            plant_id = cursor.lastrowid
+            
+            # Add planting event to history
+            cursor.execute('''
+                INSERT INTO zone_history (
+                    zone_id, plant_id, event_type, event_description
+                )
+                VALUES (?, ?, ?, ?)
+            ''', (
+                zone_id,
+                plant_id,
+                'planting',
+                f"Planted {data['species']} ({data['name']})"
+            ))
+            
+            conn.commit()
+            
+            # Return the created plant
+            cursor.execute('SELECT * FROM plants WHERE id = ?', (plant_id,))
+            plant = cursor.fetchone()
+            result = {
+                'id': plant[0],
+                'zone_id': plant[1],
+                'name': plant[2],
+                'species': plant[3],
+                'planting_date': plant[4],
+                'position_x': plant[5],
+                'position_y': plant[6],
+                'notes': plant[7],
+                'water_requirements': plant[8],
+                'created_at': plant[9],
+                'updated_at': plant[10]
+            }
+            
+            conn.close()
+            return jsonify(result), 201
+            
+    except Exception as e:
+        if 'conn' in locals():
+            conn.close()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/zones/<int:zone_id>/history', methods=['GET', 'POST'])
+def zone_history(zone_id):
+    """Manage zone history and events."""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        if request.method == 'GET':
+            cursor.execute('''
+                SELECT h.*, p.name as plant_name 
+                FROM zone_history h 
+                LEFT JOIN plants p ON h.plant_id = p.id 
+                WHERE h.zone_id = ? 
+                ORDER BY h.timestamp DESC
+            ''', (zone_id,))
+            history = cursor.fetchall()
+            
+            result = [{
+                'id': event[0],
+                'event_type': event[3],
+                'event_description': event[4],
+                'timestamp': event[5],
+                'plant_name': event[6]
+            } for event in history]
+            
+            return jsonify(result), 200
+            
+        elif request.method == 'POST':
+            data = request.json
+            required_fields = ['event_type', 'event_description']
+            if not all(field in data for field in required_fields):
+                return jsonify({'error': 'Missing required fields'}), 400
+            
+            cursor.execute('''
+                INSERT INTO zone_history (
+                    zone_id, plant_id, event_type, event_description
+                )
+                VALUES (?, ?, ?, ?)
+            ''', (
+                zone_id,
+                data.get('plant_id'),
+                data['event_type'],
+                data['event_description']
+            ))
+            
+            event_id = cursor.lastrowid
+            conn.commit()
+            conn.close()
+            return jsonify({'id': event_id, 'status': 'success'}), 201
+            
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False) 
