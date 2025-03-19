@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Plus } from 'lucide-react';
 import { ZoneCreationDialog } from '../components/zones/ZoneCreationDialog';
 import { ZoneCard } from '../components/zones/ZoneCard';
-import { useToast } from '@/components/ui/use-toast';
+import { toast } from 'sonner';
 import { fetchZones } from '../services/api';
 
 interface Zone {
@@ -35,18 +35,13 @@ interface Plant {
 export default function ZonesPage() {
   const [zones, setZones] = useState<Zone[]>([]);
   const [isCreatingZone, setIsCreatingZone] = useState(false);
-  const { toast } = useToast();
 
   const loadZones = async () => {
     try {
       const zonesData = await fetchZones();
       setZones(zonesData);
     } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to load zones',
-        variant: 'destructive',
-      });
+      toast.error('Failed to load zones');
     }
   };
 

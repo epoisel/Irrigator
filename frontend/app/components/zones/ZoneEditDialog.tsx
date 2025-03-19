@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { useToast } from '@/components/ui/use-toast';
+import { toast } from 'sonner';
 import { Zone, updateZone } from '@/app/services/api';
 
 interface ZoneEditDialogProps {
@@ -30,7 +30,6 @@ export function ZoneEditDialog({
     length: '',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { toast } = useToast();
 
   useEffect(() => {
     if (open) {
@@ -57,19 +56,11 @@ export function ZoneEditDialog({
         length: Number(formData.length),
       });
 
-      toast({
-        title: 'Success',
-        description: 'Zone updated successfully',
-      });
-
+      toast.success('Zone updated successfully');
       onZoneUpdated();
       onOpenChange(false);
     } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to update zone',
-        variant: 'destructive',
-      });
+      toast.error('Failed to update zone');
     } finally {
       setIsSubmitting(false);
     }
