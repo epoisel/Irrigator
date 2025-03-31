@@ -25,6 +25,7 @@ def init_db():
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         device_id TEXT NOT NULL,
         moisture REAL NOT NULL,
+        raw_adc_value INTEGER,
         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
     )
     ''')
@@ -255,6 +256,42 @@ def list_devices():
         conn.close()
         return False
 
+def purge_valve_history(days):
+    """Purge valve history records older than the specified number of days."""
+    if not os.path.exists(DB_PATH):
+        print(f"Error: Database file {DB_PATH} not found.")
+        return False
+    
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    # Check if valve_actions table exists
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='valve_actions'")
+    if not cursor.fetchone():
+        print("Error: valve_actions table does not exist.")
+        conn.close()
+        return False
+    
+    try:
+        # Calculate cutoff date
+        cutoff_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d %H:%M:%S')
+        
+        # Get count before deletion for reporting
+        cursor.execute("SELECT COUNT(*) FROM valve_actions WHERE timestamp < ?", (cutoff_date,))
+        count_to_delete = cursor.fetchone()[0]
+        
+        # Delete old records
+        cursor.execute("DELETE FROM valve_actions WHERE timestamp < ?", (cutoff_date,))
+        conn.commit()
+        
+        print(f"Purged {count_to_delete} valve history records older than {days} days")
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"Error purging valve history: {e}")
+        conn.close()
+        return False
+
 def main():
     parser = argparse.ArgumentParser(description='Irrigation System Database Management')
     subparsers = parser.add_subparsers(dest='command', help='Command to execute')
@@ -275,6 +312,10 @@ def main():
                              help='Table to purge data from')
     purge_parser.add_argument('days', type=int, help='Purge data older than N days')
     
+    # Purge valve history command
+    purge_valve_parser = subparsers.add_parser('purge-valve-history', help='Purge old valve history records')
+    purge_valve_parser.add_argument('days', type=int, default=30, help='Purge valve history records older than N days')
+    
     # List devices command
     list_parser = subparsers.add_parser('list-devices', help='List all devices in the database')
     
@@ -286,6 +327,8 @@ def main():
         export_data(args.table, args.output, args.days)
     elif args.command == 'purge':
         purge_data(args.table, args.days)
+    elif args.command == 'purge-valve-history':
+        purge_valve_history(args.days)
     elif args.command == 'list-devices':
         list_devices()
     else:

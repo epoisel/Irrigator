@@ -2,13 +2,45 @@
 
 import { format } from 'date-fns';
 import { ValveAction } from '../services/api';
+import { Button } from '@/components/ui/button';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface ValveHistoryProps {
   valveHistory: ValveAction[];
   isLoading: boolean;
+  pagination: {
+    total: number;
+    page: number;
+    limit: number;
+    pages: number;
+  };
+  onPageChange: (page: number) => void;
 }
 
-export default function ValveHistory({ valveHistory, isLoading }: ValveHistoryProps) {
+export default function ValveHistory({ 
+  valveHistory, 
+  isLoading, 
+  pagination, 
+  onPageChange 
+}: ValveHistoryProps) {
+  // Calculate pagination values
+  const { total: totalItems, page: currentPage, pages: totalPages } = pagination;
+  const startIndex = (currentPage - 1) * pagination.limit;
+  const endIndex = Math.min(startIndex + pagination.limit, totalItems);
+  
+  // Handle pagination
+  const goToNextPage = () => {
+    if (currentPage < totalPages) {
+      onPageChange(currentPage + 1);
+    }
+  };
+  
+  const goToPreviousPage = () => {
+    if (currentPage > 1) {
+      onPageChange(currentPage - 1);
+    }
+  };
+  
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
       <h2 className="text-xl font-semibold mb-4">Valve Activity History</h2>
@@ -22,37 +54,66 @@ export default function ValveHistory({ valveHistory, isLoading }: ValveHistoryPr
           No valve activity recorded
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Time
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Action
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {valveHistory.map((action) => (
-                <tr key={action.id}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {format(new Date(action.timestamp), 'MMM dd, yyyy HH:mm:ss')}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                      ${action.state === 1 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-red-100 text-red-800'}`}>
-                      {action.state === 1 ? 'Turned ON' : 'Turned OFF'}
-                    </span>
-                  </td>
+        <>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Time
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Action
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {valveHistory.map((action) => (
+                  <tr key={action.id}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {format(new Date(action.timestamp), 'MMM dd, yyyy HH:mm:ss')}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                        ${action.state === 1 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-red-100 text-red-800'}`}>
+                        {action.state === 1 ? 'Turned ON' : 'Turned OFF'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          
+          {/* Pagination controls */}
+          <div className="flex items-center justify-between mt-4 text-sm">
+            <div>
+              {totalItems > 0 && `Showing ${startIndex + 1}-${endIndex} of ${totalItems} entries`}
+            </div>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={goToPreviousPage} 
+                disabled={currentPage === 1}
+              >
+                <ChevronLeft className="h-4 w-4 mr-1" />
+                Previous
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={goToNextPage} 
+                disabled={currentPage === totalPages}
+              >
+                Next
+                <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

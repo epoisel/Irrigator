@@ -8,6 +8,7 @@ import threading
 from werkzeug.utils import secure_filename
 import logging
 from logging.handlers import RotatingFileHandler
+import math
 
 
 app = Flask(__name__)
@@ -287,6 +288,10 @@ def get_valve_history():
         device_id = request.args.get('device_id')
         days = int(request.args.get('days', 1))
         
+        # Pagination parameters
+        page = int(request.args.get('page', 1))  # Default to page 1
+        limit = int(request.args.get('limit', 100))  # Default to 100 records per page
+        
         if not device_id:
             return jsonify({'error': 'Device ID is required'}), 400
         
@@ -298,19 +303,44 @@ def get_valve_history():
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         
+        # Get the total count first for pagination metadata
+        cursor.execute(
+            '''SELECT COUNT(*) FROM valve_actions 
+               WHERE device_id = ? AND timestamp >= ?''',
+            (device_id, timestamp_str)
+        )
+        total_count = cursor.fetchone()[0]
+        
+        # Calculate offset for pagination
+        offset = (page - 1) * limit
+        
+        # Get paginated data
         cursor.execute(
             '''SELECT * FROM valve_actions 
                WHERE device_id = ? AND timestamp >= ? 
-               ORDER BY timestamp DESC''',
-            (device_id, timestamp_str)
+               ORDER BY timestamp DESC
+               LIMIT ? OFFSET ?''',
+            (device_id, timestamp_str, limit, offset)
         )
         
         rows = cursor.fetchall()
         result = [dict(row) for row in rows]
         conn.close()
         
-        return jsonify(result), 200
+        # Add pagination metadata
+        pagination = {
+            'total': total_count,
+            'page': page,
+            'limit': limit,
+            'pages': math.ceil(total_count / limit) if limit > 0 else 1,
+        }
+        
+        return jsonify({
+            'data': result,
+            'pagination': pagination
+        }), 200
     except Exception as e:
+        app.logger.error(f"Error retrieving valve history: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/automation', methods=['GET'])
@@ -977,20 +1007,39 @@ def get_zones():
             app.logger.error("Zones table does not exist!")
             return jsonify({'error': 'Zones table not initialized'}), 500
             
+            # Get all zones
         cursor.execute('SELECT * FROM zones ORDER BY created_at DESC')
         zones = cursor.fetchall()
         app.logger.info(f"Found {len(zones)} zones")
         
-        result = [{
-            'id': zone[0],
-            'name': zone[1],
-            'description': zone[2],
-            'device_id': zone[3],
-            'width': zone[4],
-            'length': zone[5],
-            'created_at': zone[6],
-            'updated_at': zone[7]
-        } for zone in zones]
+        result = []
+        for zone in zones:
+            zone_data = {
+                'id': zone[0],
+                'name': zone[1],
+                'description': zone[2],
+                'device_id': zone[3],
+                'width': zone[4],
+                'length': zone[5],
+                'created_at': zone[6],
+                'updated_at': zone[7]
+            }
+            
+            # Get plants for this zone
+            cursor.execute('SELECT * FROM plants WHERE zone_id = ?', (zone[0],))
+            plants = cursor.fetchall()
+            zone_data['plants'] = [{
+                'id': plant[0],
+                'name': plant[2],
+                'species': plant[3],
+                'planting_date': plant[4],
+                'position_x': plant[5],
+                'position_y': plant[6],
+                'notes': plant[7],
+                'water_requirements': plant[8]
+            } for plant in plants]
+            
+            result.append(zone_data)
         
         conn.close()
         return jsonify(result), 200

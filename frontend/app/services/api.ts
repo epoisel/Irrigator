@@ -22,6 +22,16 @@ export interface ValveAction {
   timestamp: string;
 }
 
+export interface PaginatedResponse<T> {
+  data: T[];
+  pagination: {
+    total: number;
+    page: number;
+    limit: number;
+    pages: number;
+  };
+}
+
 export interface AutomationRule {
   id?: number;
   device_id: string;
@@ -96,12 +106,19 @@ export const api = {
    * Get valve action history for a device
    * @param deviceId Device ID
    * @param days Number of days of data to retrieve
-   * @returns Promise with valve action data
+   * @param page Page number for pagination
+   * @param limit Number of items per page
+   * @returns Promise with valve action data and pagination info
    */
-  getValveHistory: async (deviceId = DEFAULT_DEVICE_ID, days = 1): Promise<ValveAction[]> => {
+  getValveHistory: async (
+    deviceId = DEFAULT_DEVICE_ID, 
+    days = 1,
+    page = 1,
+    limit = 100
+  ): Promise<PaginatedResponse<ValveAction>> => {
     try {
       const response = await axios.get(`${API_BASE_URL}/api/analytics/valve`, {
-        params: { device_id: deviceId, days }
+        params: { device_id: deviceId, days, page, limit }
       });
       return response.data;
     } catch (error) {

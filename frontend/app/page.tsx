@@ -18,6 +18,12 @@ export default function Home() {
   const [moistureData, setMoistureData] = useState<MoistureData[]>([]);
   const [currentMoisture, setCurrentMoisture] = useState<MoistureData | null>(null);
   const [valveHistory, setValveHistory] = useState<ValveAction[]>([]);
+  const [valveHistoryPagination, setValveHistoryPagination] = useState({
+    total: 0,
+    page: 1,
+    limit: 5,
+    pages: 1
+  });
   
   // State for UI
   const [selectedDays, setSelectedDays] = useState<number>(1);
@@ -62,8 +68,15 @@ export default function Home() {
       try {
         setIsLoadingValveHistory(true);
         
-        const data = await api.getValveHistory(DEFAULT_DEVICE_ID, selectedDays);
-        setValveHistory(data);
+        const response = await api.getValveHistory(
+          DEFAULT_DEVICE_ID, 
+          selectedDays,
+          valveHistoryPagination.page,
+          valveHistoryPagination.limit
+        );
+        
+        setValveHistory(response.data);
+        setValveHistoryPagination(response.pagination);
       } catch (err) {
         console.error('Error fetching valve history:', err);
       } finally {
@@ -72,21 +85,36 @@ export default function Home() {
     };
     
     fetchValveHistory();
-  }, [selectedDays]);
+  }, [selectedDays, valveHistoryPagination.page, valveHistoryPagination.limit]);
   
   // Handle valve state change
   const handleValveChange = () => {
     // Refresh valve history when valve state changes
     const fetchValveHistory = async () => {
       try {
-        const data = await api.getValveHistory(DEFAULT_DEVICE_ID, selectedDays);
-        setValveHistory(data);
+        const response = await api.getValveHistory(
+          DEFAULT_DEVICE_ID, 
+          selectedDays,
+          valveHistoryPagination.page,
+          valveHistoryPagination.limit
+        );
+        
+        setValveHistory(response.data);
+        setValveHistoryPagination(response.pagination);
       } catch (err) {
         console.error('Error fetching valve history:', err);
       }
     };
     
     fetchValveHistory();
+  };
+  
+  // Handle valve history page change
+  const handleValveHistoryPageChange = (page: number) => {
+    setValveHistoryPagination(prev => ({
+      ...prev,
+      page
+    }));
   };
   
   return (
@@ -123,7 +151,9 @@ export default function Home() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <ValveHistory 
           valveHistory={valveHistory} 
-          isLoading={isLoadingValveHistory} 
+          isLoading={isLoadingValveHistory}
+          pagination={valveHistoryPagination}
+          onPageChange={handleValveHistoryPageChange}
         />
         <AutomationSettings 
           deviceId={DEFAULT_DEVICE_ID} 
