@@ -20,8 +20,8 @@ export default function ValveControl({ deviceId, onValveChange }: ValveControlPr
       try {
         // Get the most recent valve action
         const history = await api.getValveHistory(deviceId, 1);
-        if (history && history.length > 0) {
-          const lastAction = history[0];
+        if (history && history.data && history.data.length > 0) {
+          const lastAction = history.data[0];
           setValveState(lastAction.state);
         }
 
