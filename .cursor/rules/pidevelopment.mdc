@@ -1,0 +1,6 @@
+---
+description: Developing for raspberry pi
+globs: 
+---
+
+make sure all instructions takes into account that we are developing on windows but then pushing to a raspberry pi via git hub. The ssh name is epois@raspberrypi.local

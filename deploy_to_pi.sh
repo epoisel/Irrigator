@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Configuration
-PI_IP="192.168.1.XX"  # REPLACE THIS with your Raspberry Pi's actual IP address
+PI_IP="192.168.1.65"  # REPLACE THIS with your Raspberry Pi's actual IP address
 PI_USER="epois"
 PI_HOST="$PI_USER@$PI_IP"
 REMOTE_DIR="/home/$PI_USER/pico_irrigator"

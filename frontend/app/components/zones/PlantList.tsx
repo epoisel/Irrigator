@@ -29,7 +29,7 @@ export function PlantList({ plants, onDelete, onEdit }: PlantListProps) {
           <Card key={plant.id} className="relative">
             <CardContent className="pt-4">
               <div className="flex justify-between items-start">
-                <div>
+                <div className="flex-grow pr-4">
                   <h4 className="font-medium">{plant.name}</h4>
                   <p className="text-sm text-muted-foreground">{plant.species}</p>
                   <div className="text-sm mt-1">
@@ -43,17 +43,18 @@ export function PlantList({ plants, onDelete, onEdit }: PlantListProps) {
                     <p className="text-sm mt-2 text-muted-foreground">{plant.notes}</p>
                   )}
                 </div>
-                <div className="flex space-x-2">
+                <div className="flex-shrink-0 flex space-x-1">
                   <Button
                     variant="ghost"
                     size="icon"
                     onClick={() => onEdit(plant)}
+                    className="h-8 w-8"
                   >
                     <Edit className="h-4 w-4" />
                   </Button>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <Button variant="ghost" size="icon">
+                      <Button variant="ghost" size="icon" className="h-8 w-8">
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </AlertDialogTrigger>
