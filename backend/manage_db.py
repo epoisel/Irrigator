@@ -51,6 +51,25 @@ def init_db():
     )
     ''')
 
+    # Create watering_profiles table
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS watering_profiles (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        device_id TEXT NOT NULL,
+        is_default INTEGER NOT NULL DEFAULT 0,
+        watering_duration INTEGER NOT NULL DEFAULT 300,
+        wicking_wait_time INTEGER NOT NULL DEFAULT 3600,
+        max_daily_cycles INTEGER NOT NULL DEFAULT 4,
+        reservoir_limit INTEGER,
+        reservoir_volume INTEGER,
+        max_watering_per_day INTEGER,
+        sensing_interval INTEGER DEFAULT 300,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+    ''')
+
     # Create zones table
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS zones (

@@ -82,6 +82,37 @@ export interface CreatePlantData {
   water_requirements?: string;
 }
 
+// Add these types and API functions near the other type definitions
+
+export interface WateringProfile {
+  id: number;
+  name: string;
+  device_id: string;
+  is_default: number;
+  watering_duration: number;
+  wicking_wait_time: number;
+  max_daily_cycles: number;
+  sensing_interval: number;
+  reservoir_limit: number | null;
+  reservoir_volume: number | null;
+  max_watering_per_day: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateWateringProfileData {
+  name: string;
+  device_id: string;
+  is_default?: number;
+  watering_duration?: number;
+  wicking_wait_time?: number;
+  max_daily_cycles?: number;
+  sensing_interval?: number;
+  reservoir_limit?: number;
+  reservoir_volume?: number;
+  max_watering_per_day?: number;
+}
+
 // API functions
 export const api = {
   /**
@@ -190,6 +221,99 @@ export const api = {
       return response.data;
     } catch (error) {
       console.error('Error controlling automation:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get all watering profiles for a device
+   * @param deviceId Device ID
+   * @returns Promise with array of watering profiles
+   */
+  getWateringProfiles: async (deviceId = DEFAULT_DEVICE_ID): Promise<WateringProfile[]> => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/profiles`, {
+        params: { device_id: deviceId }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching watering profiles:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get a specific watering profile
+   * @param profileId Profile ID
+   * @returns Promise with profile data
+   */
+  getWateringProfile: async (profileId: number): Promise<WateringProfile> => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/profiles/${profileId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching watering profile:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Create a new watering profile
+   * @param profileData Profile data
+   * @returns Promise with created profile ID
+   */
+  createWateringProfile: async (profileData: CreateWateringProfileData): Promise<{ id: number, status: string, message: string }> => {
+    try {
+      const response = await axios.post(`${API_BASE_URL}/api/profiles`, profileData);
+      return response.data;
+    } catch (error) {
+      console.error('Error creating watering profile:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Update an existing watering profile
+   * @param profileId Profile ID
+   * @param profileData Profile data to update
+   * @returns Promise with success status
+   */
+  updateWateringProfile: async (profileId: number, profileData: Partial<CreateWateringProfileData>): Promise<{ status: string, message: string }> => {
+    try {
+      const response = await axios.put(`${API_BASE_URL}/api/profiles/${profileId}`, profileData);
+      return response.data;
+    } catch (error) {
+      console.error('Error updating watering profile:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Delete a watering profile
+   * @param profileId Profile ID
+   * @returns Promise with success status
+   */
+  deleteWateringProfile: async (profileId: number): Promise<{ status: string, message: string }> => {
+    try {
+      const response = await axios.delete(`${API_BASE_URL}/api/profiles/${profileId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error deleting watering profile:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Set a profile as the default for a device
+   * @param profileId Profile ID
+   * @returns Promise with success status
+   */
+  setDefaultProfile: async (profileId: number): Promise<{ status: string, message: string }> => {
+    try {
+      const response = await axios.post(`${API_BASE_URL}/api/profiles/${profileId}/set-default`);
+      return response.data;
+    } catch (error) {
+      console.error('Error setting default profile:', error);
       throw error;
     }
   },

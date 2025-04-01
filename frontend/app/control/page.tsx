@@ -7,7 +7,9 @@ import { api, ValveAction } from '../services/api';
 import ValveControl from '../components/ValveControl';
 import AutomationSettings from '../components/AutomationSettings';
 import ValveHistory from '../components/ValveHistory';
+import WateringProfiles from '../components/WateringProfiles';
 import TimeRangeSelector from '../components/TimeRangeSelector';
+import { Settings, Droplet, History, ListFilter } from 'lucide-react';
 
 // Default device ID - this would typically come from user selection or configuration
 const DEFAULT_DEVICE_ID = process.env.NEXT_PUBLIC_DEFAULT_DEVICE_ID || 'pico_01';
@@ -32,21 +34,28 @@ export default function ControlPage() {
         const response = await api.getValveHistory(
           DEFAULT_DEVICE_ID, 
           selectedDays,
-          valveHistoryPagination.page,
-          valveHistoryPagination.limit
+          valveHistoryPagination?.page || 1,
+          valveHistoryPagination?.limit || 5
         );
         
-        setValveHistory(response.data);
-        setValveHistoryPagination(response.pagination);
+        if (response && response.data) {
+          setValveHistory(response.data);
+        }
+        
+        if (response && response.pagination) {
+          setValveHistoryPagination(response.pagination);
+        }
       } catch (err) {
         console.error('Error fetching valve history:', err);
+        // Set empty data on error to prevent undefined access
+        setValveHistory([]);
       } finally {
         setIsLoadingValveHistory(false);
       }
     };
     
     fetchValveHistory();
-  }, [selectedDays, valveHistoryPagination.page, valveHistoryPagination.limit]);
+  }, [selectedDays, valveHistoryPagination?.page, valveHistoryPagination?.limit]);
   
   // Handle valve state change
   const handleValveChange = () => {
@@ -56,14 +65,21 @@ export default function ControlPage() {
         const response = await api.getValveHistory(
           DEFAULT_DEVICE_ID, 
           selectedDays,
-          valveHistoryPagination.page,
-          valveHistoryPagination.limit
+          valveHistoryPagination?.page || 1,
+          valveHistoryPagination?.limit || 5
         );
         
-        setValveHistory(response.data);
-        setValveHistoryPagination(response.pagination);
+        if (response && response.data) {
+          setValveHistory(response.data);
+        }
+        
+        if (response && response.pagination) {
+          setValveHistoryPagination(response.pagination);
+        }
       } catch (err) {
         console.error('Error fetching valve history:', err);
+        // Set empty data on error
+        setValveHistory([]);
       }
     };
     
@@ -73,7 +89,7 @@ export default function ControlPage() {
   // Handle valve history page change
   const handleValveHistoryPageChange = (page: number) => {
     setValveHistoryPagination(prev => ({
-      ...prev,
+      ...(prev || { total: 0, limit: 5, pages: 1 }),
       page
     }));
   };
@@ -89,39 +105,37 @@ export default function ControlPage() {
       </div>
       
       <Tabs defaultValue="manual" className="mb-6">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="manual">Manual Control</TabsTrigger>
-          <TabsTrigger value="automation">Automation Rules</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="manual" className="flex items-center">
+            <Droplet className="mr-2 h-4 w-4" />
+            Manual Control
+          </TabsTrigger>
+          <TabsTrigger value="automation" className="flex items-center">
+            <Settings className="mr-2 h-4 w-4" />
+            Basic Automation
+          </TabsTrigger>
+          <TabsTrigger value="profiles" className="flex items-center">
+            <ListFilter className="mr-2 h-4 w-4" />
+            Advanced Profiles
+          </TabsTrigger>
+          <TabsTrigger value="history" className="flex items-center">
+            <History className="mr-2 h-4 w-4" />
+            Valve History
+          </TabsTrigger>
         </TabsList>
         
         <TabsContent value="manual">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card className="md:col-span-2">
-              <CardHeader>
-                <CardTitle>Valve Control</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ValveControl 
-                  deviceId={DEFAULT_DEVICE_ID} 
-                  onValveChange={handleValveChange} 
-                />
-              </CardContent>
-            </Card>
-            
-            <Card className="md:col-span-2">
-              <CardHeader>
-                <CardTitle>Valve History</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ValveHistory 
-                  valveHistory={valveHistory} 
-                  isLoading={isLoadingValveHistory}
-                  pagination={valveHistoryPagination}
-                  onPageChange={handleValveHistoryPageChange}
-                />
-              </CardContent>
-            </Card>
-          </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Valve Control</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ValveControl 
+                deviceId={DEFAULT_DEVICE_ID} 
+                onValveChange={handleValveChange} 
+              />
+            </CardContent>
+          </Card>
         </TabsContent>
         
         <TabsContent value="automation">
@@ -132,6 +146,33 @@ export default function ControlPage() {
             <CardContent>
               <AutomationSettings 
                 deviceId={DEFAULT_DEVICE_ID} 
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        <TabsContent value="profiles">
+          <Card>
+            <CardHeader>
+              <CardTitle>Advanced Watering Profiles</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <WateringProfiles deviceId={DEFAULT_DEVICE_ID} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        <TabsContent value="history">
+          <Card>
+            <CardHeader>
+              <CardTitle>Valve History</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ValveHistory 
+                valveHistory={valveHistory || []}
+                isLoading={isLoadingValveHistory}
+                pagination={valveHistoryPagination || { total: 0, page: 1, limit: 5, pages: 1 }}
+                onPageChange={handleValveHistoryPageChange}
               />
             </CardContent>
           </Card>

@@ -18,15 +18,21 @@ interface ValveHistoryProps {
 }
 
 export default function ValveHistory({ 
-  valveHistory, 
+  valveHistory = [], 
   isLoading, 
-  pagination, 
+  pagination = { total: 0, page: 1, limit: 5, pages: 1 }, 
   onPageChange 
 }: ValveHistoryProps) {
-  // Calculate pagination values
-  const { total: totalItems, page: currentPage, pages: totalPages } = pagination;
-  const startIndex = (currentPage - 1) * pagination.limit;
-  const endIndex = Math.min(startIndex + pagination.limit, totalItems);
+  // Calculate pagination values with safe defaults
+  const { 
+    total: totalItems = 0, 
+    page: currentPage = 1, 
+    limit = 5,
+    pages: totalPages = 1 
+  } = pagination || {};
+  
+  const startIndex = Math.max(0, (currentPage - 1) * limit);
+  const endIndex = Math.min(startIndex + limit, totalItems);
   
   // Handle pagination
   const goToNextPage = () => {
@@ -49,7 +55,7 @@ export default function ValveHistory({
         <div className="flex justify-center items-center h-64">
           <div className="loading-spinner"></div>
         </div>
-      ) : valveHistory.length === 0 ? (
+      ) : (!valveHistory || valveHistory.length === 0) ? (
         <div className="flex justify-center items-center h-64 text-gray-500">
           No valve activity recorded
         </div>
@@ -97,7 +103,7 @@ export default function ValveHistory({
                 variant="outline" 
                 size="sm" 
                 onClick={goToPreviousPage} 
-                disabled={currentPage === 1}
+                disabled={currentPage <= 1}
               >
                 <ChevronLeft className="h-4 w-4 mr-1" />
                 Previous
@@ -106,7 +112,7 @@ export default function ValveHistory({
                 variant="outline" 
                 size="sm" 
                 onClick={goToNextPage} 
-                disabled={currentPage === totalPages}
+                disabled={currentPage >= totalPages}
               >
                 Next
                 <ChevronRight className="h-4 w-4 ml-1" />

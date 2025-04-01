@@ -64,10 +64,14 @@ def allowed_file(filename):
     """Check if the file extension is allowed"""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# Watering control constants
-WICKING_WAIT_TIME = 60 * 60  # 60 minutes in seconds
-WATERING_DURATION = 5 * 60   # 5 minutes in seconds
-MAX_DAILY_CYCLES = 4         # Maximum watering cycles per day
+# Default watering control constants (will be overridden by profiles)
+DEFAULT_WICKING_WAIT_TIME = 60 * 60  # 60 minutes in seconds
+DEFAULT_WATERING_DURATION = 5 * 60   # 5 minutes in seconds
+DEFAULT_MAX_DAILY_CYCLES = 4         # Maximum watering cycles per day
+DEFAULT_SENSING_INTERVAL = 5 * 60    # 5 minutes in seconds
+
+# In-memory state tracking 
+device_profiles = {}  # Maps device_id to active profile
 
 def init_db():
     """Initialize the database with required tables if they don't exist."""
@@ -147,10 +151,80 @@ def init_db():
 # Initialize database
 init_db()
 
+def get_device_profile(device_id):
+    """Get the active watering profile for a device."""
+    # Return from cache if available
+    if device_id in device_profiles:
+        return device_profiles[device_id]
+    
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        # First try to get the default profile for this device
+        cursor.execute(
+            'SELECT * FROM watering_profiles WHERE device_id = ? AND is_default = 1',
+            (device_id,)
+        )
+        
+        profile = cursor.fetchone()
+        
+        # If no default profile exists, get the most recently updated profile
+        if not profile:
+            cursor.execute(
+                'SELECT * FROM watering_profiles WHERE device_id = ? ORDER BY updated_at DESC LIMIT 1',
+                (device_id,)
+            )
+            profile = cursor.fetchone()
+        
+        conn.close()
+        
+        # If we still don't have a profile, return default values
+        if not profile:
+            return {
+                'name': 'Default',
+                'watering_duration': DEFAULT_WATERING_DURATION,
+                'wicking_wait_time': DEFAULT_WICKING_WAIT_TIME,
+                'max_daily_cycles': DEFAULT_MAX_DAILY_CYCLES,
+                'sensing_interval': DEFAULT_SENSING_INTERVAL,
+                'reservoir_limit': None,
+                'reservoir_volume': None,
+                'max_watering_per_day': None
+            }
+        
+        # Cache the profile
+        profile_dict = dict(profile)
+        device_profiles[device_id] = profile_dict
+        return profile_dict
+    
+    except Exception as e:
+        print(f"Error getting device profile: {str(e)}")
+        # Return default values on error
+        return {
+            'name': 'Default',
+            'watering_duration': DEFAULT_WATERING_DURATION,
+            'wicking_wait_time': DEFAULT_WICKING_WAIT_TIME,
+            'max_daily_cycles': DEFAULT_MAX_DAILY_CYCLES,
+            'sensing_interval': DEFAULT_SENSING_INTERVAL,
+            'reservoir_limit': None,
+            'reservoir_volume': None,
+            'max_watering_per_day': None
+        }
+
+def refresh_device_profile(device_id):
+    """Force refresh the cached profile for a device."""
+    if device_id in device_profiles:
+        del device_profiles[device_id]
+    return get_device_profile(device_id)
+
 def can_water_device(device_id, current_time=None):
     """Check if it's safe to water the device based on timing rules."""
     if current_time is None:
         current_time = time.time()
+    
+    # Get device profile
+    profile = get_device_profile(device_id)
     
     # Initialize tracking for new devices
     if device_id not in last_watering_times:
@@ -174,8 +248,20 @@ def can_water_device(device_id, current_time=None):
     # Check timing rules
     time_since_last_water = current_time - last_watering_times[device_id]
     
-    return (time_since_last_water >= WICKING_WAIT_TIME and 
-            daily_cycles[device_id] < MAX_DAILY_CYCLES)
+    # Apply profile rules
+    max_daily_cycles = profile['max_daily_cycles']
+    wicking_wait_time = profile['wicking_wait_time']
+    
+    # Calculate amount of water used today
+    water_used_today = daily_cycles[device_id] * (profile['watering_duration'] / 60)  # in minutes
+    
+    # Check if we're about to exceed reservoir limits
+    if profile['max_watering_per_day'] and water_used_today >= profile['max_watering_per_day']:
+        print(f"Cannot water: Maximum daily watering limit reached ({water_used_today} minutes)")
+        return False
+    
+    return (time_since_last_water >= wicking_wait_time and 
+            daily_cycles[device_id] < max_daily_cycles)
 
 def update_watering_state(device_id, current_time=None):
     """Update the watering state for a device."""
@@ -200,7 +286,7 @@ def receive_sensor_data():
         # Initialize watering state for new devices
         current_time = time.time()
         if device_id not in last_watering_times:
-            last_watering_times[device_id] = current_time - WICKING_WAIT_TIME  # Allow immediate watering
+            last_watering_times[device_id] = current_time - DEFAULT_WICKING_WAIT_TIME  # Allow immediate watering
             daily_cycles[device_id] = 0
             last_cycle_reset[device_id] = current_time
         
@@ -432,6 +518,9 @@ def check_automation_rules(device_id, moisture):
         print(f"\nChecking automation rules for device {device_id}")
         print(f"Current moisture level: {moisture:.1f}%")
         
+        # Get device profile
+        profile = get_device_profile(device_id)
+        
         # Check for manual override
         if device_id in manual_override and manual_override[device_id]:
             print("Manual override is active - skipping automation")
@@ -453,6 +542,7 @@ def check_automation_rules(device_id, moisture):
             print(f"Found active automation rule:")
             print(f"- Low threshold: {rule['low_threshold']}%")
             print(f"- High threshold: {rule['high_threshold']}%")
+            print(f"- Using profile: {profile['name']}")
             
             current_time = time.time()
             
@@ -464,9 +554,9 @@ def check_automation_rules(device_id, moisture):
                     # Start watering cycle
                     control_valve_internal(device_id, 1, is_manual=False)
                     
-                    # Schedule valve turn off after WATERING_DURATION
+                    # Schedule valve turn off after watering duration from profile
                     def turn_off_valve():
-                        time.sleep(WATERING_DURATION)
+                        time.sleep(profile['watering_duration'])
                         print(f"Watering cycle complete for device {device_id}")
                         control_valve_internal(device_id, 0, is_manual=False)
                         update_watering_state(device_id)
@@ -478,7 +568,7 @@ def check_automation_rules(device_id, moisture):
                 else:
                     print("Cannot water due to timing rules:")
                     print(f"- Time since last water: {(current_time - last_watering_times[device_id]) / 60:.1f} minutes")
-                    print(f"- Daily cycles used: {daily_cycles[device_id]} of {MAX_DAILY_CYCLES}")
+                    print(f"- Daily cycles used: {daily_cycles[device_id]} of {profile['max_daily_cycles']}")
             
             elif moisture >= rule['high_threshold']:
                 print(f"Moisture ({moisture:.1f}%) is above high threshold ({rule['high_threshold']}%)")
@@ -585,6 +675,10 @@ def automation_worker():
             devices = [row['device_id'] for row in cursor.fetchall()]
             
             for device_id in devices:
+                # Get device profile for sensing interval
+                profile = get_device_profile(device_id)
+                sensing_interval = profile.get('sensing_interval', DEFAULT_SENSING_INTERVAL)
+                
                 # Get latest moisture reading
                 cursor.execute('''
                     SELECT moisture FROM moisture_data
@@ -601,8 +695,8 @@ def automation_worker():
         except Exception as e:
             print(f"Error in automation worker: {str(e)}")
         
-        # Check every 5 minutes
-        time.sleep(300)
+        # Sleep for minimum sensing interval (we'll check each device's specific interval)
+        time.sleep(60)  # Check every minute
 
 # Start automation worker thread
 automation_thread = threading.Thread(target=automation_worker)
@@ -1451,6 +1545,293 @@ def manage_plant(zone_id, plant_id):
     except Exception as e:
         if 'conn' in locals():
             conn.close()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/profiles', methods=['GET'])
+def get_watering_profiles():
+    """Endpoint to retrieve all watering profiles for a device."""
+    try:
+        device_id = request.args.get('device_id')
+        
+        if not device_id:
+            return jsonify({'error': 'Device ID is required'}), 400
+        
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        cursor.execute(
+            'SELECT * FROM watering_profiles WHERE device_id = ? ORDER BY updated_at DESC',
+            (device_id,)
+        )
+        
+        profiles = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        
+        # If no profiles exist, return the default values
+        if not profiles:
+            default_profile = {
+                'id': 0,
+                'name': 'Default',
+                'device_id': device_id,
+                'is_default': 1,
+                'watering_duration': DEFAULT_WATERING_DURATION,
+                'wicking_wait_time': DEFAULT_WICKING_WAIT_TIME,
+                'max_daily_cycles': DEFAULT_MAX_DAILY_CYCLES,
+                'sensing_interval': DEFAULT_SENSING_INTERVAL,
+                'reservoir_limit': None,
+                'reservoir_volume': None,
+                'max_watering_per_day': None,
+                'created_at': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'updated_at': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            }
+            return jsonify([default_profile]), 200
+        
+        return jsonify(profiles), 200
+    except Exception as e:
+        app.logger.error(f"Error getting watering profiles: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/profiles/<int:profile_id>', methods=['GET'])
+def get_profile(profile_id):
+    """Endpoint to retrieve a specific watering profile."""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT * FROM watering_profiles WHERE id = ?', (profile_id,))
+        profile = cursor.fetchone()
+        conn.close()
+        
+        if not profile:
+            return jsonify({'error': 'Profile not found'}), 404
+        
+        return jsonify(dict(profile)), 200
+    except Exception as e:
+        app.logger.error(f"Error getting profile: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/profiles', methods=['POST'])
+def create_watering_profile():
+    """Endpoint to create a new watering profile."""
+    try:
+        data = request.json
+        if not data or 'device_id' not in data or 'name' not in data:
+            return jsonify({'error': 'Invalid data format'}), 400
+        
+        # Extract values with defaults
+        device_id = data['device_id']
+        name = data['name']
+        is_default = int(data.get('is_default', 0))
+        watering_duration = int(data.get('watering_duration', DEFAULT_WATERING_DURATION))
+        wicking_wait_time = int(data.get('wicking_wait_time', DEFAULT_WICKING_WAIT_TIME))
+        max_daily_cycles = int(data.get('max_daily_cycles', DEFAULT_MAX_DAILY_CYCLES))
+        sensing_interval = int(data.get('sensing_interval', DEFAULT_SENSING_INTERVAL))
+        
+        # Optional parameters
+        reservoir_limit = data.get('reservoir_limit')
+        reservoir_volume = data.get('reservoir_volume')
+        max_watering_per_day = data.get('max_watering_per_day')
+        
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # If this is being set as the default, unset any existing defaults
+        if is_default:
+            cursor.execute(
+                'UPDATE watering_profiles SET is_default = 0 WHERE device_id = ?',
+                (device_id,)
+            )
+        
+        # Insert new profile
+        cursor.execute(
+            '''INSERT INTO watering_profiles 
+               (name, device_id, is_default, watering_duration, wicking_wait_time, 
+                max_daily_cycles, sensing_interval, reservoir_limit, reservoir_volume, 
+                max_watering_per_day, created_at, updated_at) 
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))''',
+            (name, device_id, is_default, watering_duration, wicking_wait_time, 
+             max_daily_cycles, sensing_interval, reservoir_limit, reservoir_volume, 
+             max_watering_per_day)
+        )
+        
+        profile_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        
+        # Remove from cache to force refresh
+        refresh_device_profile(device_id)
+        
+        return jsonify({
+            'id': profile_id,
+            'status': 'success',
+            'message': 'Profile created successfully'
+        }), 201
+    except Exception as e:
+        app.logger.error(f"Error creating watering profile: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/profiles/<int:profile_id>', methods=['PUT'])
+def update_watering_profile(profile_id):
+    """Endpoint to update an existing watering profile."""
+    try:
+        data = request.json
+        if not data:
+            return jsonify({'error': 'Invalid data format'}), 400
+        
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Get existing profile to get the device_id
+        cursor.execute('SELECT device_id FROM watering_profiles WHERE id = ?', (profile_id,))
+        row = cursor.fetchone()
+        
+        if not row:
+            conn.close()
+            return jsonify({'error': 'Profile not found'}), 404
+        
+        device_id = row[0]
+        
+        # Handle setting this as default
+        if 'is_default' in data and data['is_default']:
+            cursor.execute(
+                'UPDATE watering_profiles SET is_default = 0 WHERE device_id = ?',
+                (device_id,)
+            )
+        
+        # Build update statement dynamically
+        fields = []
+        params = []
+        
+        update_fields = [
+            'name', 'is_default', 'watering_duration', 'wicking_wait_time',
+            'max_daily_cycles', 'sensing_interval', 'reservoir_limit',
+            'reservoir_volume', 'max_watering_per_day'
+        ]
+        
+        for field in update_fields:
+            if field in data:
+                fields.append(f"{field} = ?")
+                params.append(data[field])
+        
+        # Always update the updated_at timestamp
+        fields.append("updated_at = datetime('now')")
+        
+        if not fields:
+            conn.close()
+            return jsonify({'error': 'No fields to update'}), 400
+        
+        params.append(profile_id)
+        
+        # Execute update
+        cursor.execute(
+            f"UPDATE watering_profiles SET {', '.join(fields)} WHERE id = ?",
+            params
+        )
+        
+        conn.commit()
+        conn.close()
+        
+        # Remove from cache to force refresh
+        refresh_device_profile(device_id)
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Profile updated successfully'
+        }), 200
+    except Exception as e:
+        app.logger.error(f"Error updating watering profile: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/profiles/<int:profile_id>', methods=['DELETE'])
+def delete_watering_profile(profile_id):
+    """Endpoint to delete a watering profile."""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Get device_id before deleting
+        cursor.execute('SELECT device_id, is_default FROM watering_profiles WHERE id = ?', (profile_id,))
+        row = cursor.fetchone()
+        
+        if not row:
+            conn.close()
+            return jsonify({'error': 'Profile not found'}), 404
+        
+        device_id, is_default = row
+        
+        # Delete the profile
+        cursor.execute('DELETE FROM watering_profiles WHERE id = ?', (profile_id,))
+        
+        # If this was the default profile, set another profile as default if available
+        if is_default:
+            cursor.execute(
+                'SELECT id FROM watering_profiles WHERE device_id = ? ORDER BY updated_at DESC LIMIT 1',
+                (device_id,)
+            )
+            new_default = cursor.fetchone()
+            if new_default:
+                cursor.execute(
+                    'UPDATE watering_profiles SET is_default = 1 WHERE id = ?',
+                    (new_default[0],)
+                )
+        
+        conn.commit()
+        conn.close()
+        
+        # Remove from cache to force refresh
+        refresh_device_profile(device_id)
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Profile deleted successfully'
+        }), 200
+    except Exception as e:
+        app.logger.error(f"Error deleting watering profile: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/profiles/<int:profile_id>/set-default', methods=['POST'])
+def set_default_profile(profile_id):
+    """Endpoint to set a profile as the default for a device."""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Get device_id for the profile
+        cursor.execute('SELECT device_id FROM watering_profiles WHERE id = ?', (profile_id,))
+        row = cursor.fetchone()
+        
+        if not row:
+            conn.close()
+            return jsonify({'error': 'Profile not found'}), 404
+        
+        device_id = row[0]
+        
+        # Clear existing defaults
+        cursor.execute(
+            'UPDATE watering_profiles SET is_default = 0 WHERE device_id = ?',
+            (device_id,)
+        )
+        
+        # Set this profile as default
+        cursor.execute(
+            'UPDATE watering_profiles SET is_default = 1 WHERE id = ?',
+            (profile_id,)
+        )
+        
+        conn.commit()
+        conn.close()
+        
+        # Remove from cache to force refresh
+        refresh_device_profile(device_id)
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Profile set as default'
+        }), 200
+    except Exception as e:
+        app.logger.error(f"Error setting default profile: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
