@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+// Comment out missing UI components
+// import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+// import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { api, ValveAction } from '../services/api';
 import ValveControl from '../components/ValveControl';
 import AutomationSettings from '../components/AutomationSettings';
@@ -24,6 +25,7 @@ export default function ControlPage() {
   });
   const [selectedDays, setSelectedDays] = useState<number>(1);
   const [isLoadingValveHistory, setIsLoadingValveHistory] = useState<boolean>(true);
+  const [activeTab, setActiveTab] = useState('manual');
   
   // Load valve history
   useEffect(() => {
@@ -104,80 +106,118 @@ export default function ControlPage() {
         />
       </div>
       
-      <Tabs defaultValue="manual" className="mb-6">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="manual" className="flex items-center">
-            <Droplet className="mr-2 h-4 w-4" />
-            Manual Control
-          </TabsTrigger>
-          <TabsTrigger value="automation" className="flex items-center">
-            <Settings className="mr-2 h-4 w-4" />
-            Basic Automation
-          </TabsTrigger>
-          <TabsTrigger value="profiles" className="flex items-center">
-            <ListFilter className="mr-2 h-4 w-4" />
-            Advanced Profiles
-          </TabsTrigger>
-          <TabsTrigger value="history" className="flex items-center">
-            <History className="mr-2 h-4 w-4" />
-            Valve History
-          </TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value="manual">
-          <Card>
-            <CardHeader>
-              <CardTitle>Valve Control</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ValveControl 
-                deviceId={DEFAULT_DEVICE_ID} 
-                onValveChange={handleValveChange} 
-              />
-            </CardContent>
-          </Card>
-        </TabsContent>
-        
-        <TabsContent value="automation">
-          <Card>
-            <CardHeader>
-              <CardTitle>Automation Settings</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <AutomationSettings 
-                deviceId={DEFAULT_DEVICE_ID} 
-              />
-            </CardContent>
-          </Card>
-        </TabsContent>
-        
-        <TabsContent value="profiles">
-          <Card>
-            <CardHeader>
-              <CardTitle>Advanced Watering Profiles</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <WateringProfiles deviceId={DEFAULT_DEVICE_ID} />
-            </CardContent>
-          </Card>
-        </TabsContent>
-        
-        <TabsContent value="history">
-          <Card>
-            <CardHeader>
-              <CardTitle>Valve History</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ValveHistory 
-                valveHistory={valveHistory || []}
-                isLoading={isLoadingValveHistory}
-                pagination={valveHistoryPagination || { total: 0, page: 1, limit: 5, pages: 1 }}
-                onPageChange={handleValveHistoryPageChange}
-              />
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+      {/* Tabs Navigation */}
+      <div className="mb-6">
+        <div className="border-b border-gray-200">
+          <nav className="flex -mb-px">
+            <button
+              onClick={() => setActiveTab('manual')}
+              className={`mr-1 py-4 px-4 flex items-center border-b-2 font-medium text-sm ${
+                activeTab === 'manual'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <Droplet className="mr-2 h-4 w-4" />
+              Manual Control
+            </button>
+            <button
+              onClick={() => setActiveTab('automation')}
+              className={`mr-1 py-4 px-4 flex items-center border-b-2 font-medium text-sm ${
+                activeTab === 'automation'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <Settings className="mr-2 h-4 w-4" />
+              Basic Automation
+            </button>
+            <button
+              onClick={() => setActiveTab('profiles')}
+              className={`mr-1 py-4 px-4 flex items-center border-b-2 font-medium text-sm ${
+                activeTab === 'profiles'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <ListFilter className="mr-2 h-4 w-4" />
+              Advanced Profiles
+            </button>
+            <button
+              onClick={() => setActiveTab('history')}
+              className={`mr-1 py-4 px-4 flex items-center border-b-2 font-medium text-sm ${
+                activeTab === 'history'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <History className="mr-2 h-4 w-4" />
+              Valve History
+            </button>
+          </nav>
+        </div>
+
+        {/* Tab Content */}
+        <div className="mt-4">
+          {/* Manual Control Tab */}
+          {activeTab === 'manual' && (
+            <div className="border rounded-lg shadow-sm overflow-hidden">
+              <div className="p-4 bg-gray-50 border-b">
+                <h2 className="text-xl font-semibold">Valve Control</h2>
+              </div>
+              <div className="p-4">
+                <ValveControl 
+                  deviceId={DEFAULT_DEVICE_ID} 
+                  onValveChange={handleValveChange} 
+                />
+              </div>
+            </div>
+          )}
+          
+          {/* Automation Tab */}
+          {activeTab === 'automation' && (
+            <div className="border rounded-lg shadow-sm overflow-hidden">
+              <div className="p-4 bg-gray-50 border-b">
+                <h2 className="text-xl font-semibold">Automation Settings</h2>
+              </div>
+              <div className="p-4">
+                <AutomationSettings 
+                  deviceId={DEFAULT_DEVICE_ID} 
+                />
+              </div>
+            </div>
+          )}
+          
+          {/* Profiles Tab */}
+          {activeTab === 'profiles' && (
+            <div className="border rounded-lg shadow-sm overflow-hidden">
+              <div className="p-4 bg-gray-50 border-b">
+                <h2 className="text-xl font-semibold">Advanced Watering Profiles</h2>
+              </div>
+              <div className="p-4">
+                <WateringProfiles deviceId={DEFAULT_DEVICE_ID} />
+              </div>
+            </div>
+          )}
+          
+          {/* History Tab */}
+          {activeTab === 'history' && (
+            <div className="border rounded-lg shadow-sm overflow-hidden">
+              <div className="p-4 bg-gray-50 border-b">
+                <h2 className="text-xl font-semibold">Valve History</h2>
+              </div>
+              <div className="p-4">
+                <ValveHistory 
+                  valveHistory={valveHistory || []}
+                  isLoading={isLoadingValveHistory}
+                  pagination={valveHistoryPagination || { total: 0, page: 1, limit: 5, pages: 1 }}
+                  onPageChange={handleValveHistoryPageChange}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 } 

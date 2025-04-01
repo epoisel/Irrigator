@@ -3,14 +3,15 @@
 import { useState, useEffect } from 'react';
 import { api, WateringProfile } from '../services/api';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+// Comment out missing UI components
+// import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Plus, Edit, Trash2, Check, Clock, Droplet } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
 import { ProfileDialog } from './ProfileDialog';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Badge } from '@/components/ui/badge';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+// import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+// import { Badge } from '@/components/ui/badge';
+// import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface WateringProfilesProps {
   deviceId: string;
@@ -21,6 +22,7 @@ export default function WateringProfiles({ deviceId }: WateringProfilesProps) {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [selectedProfile, setSelectedProfile] = useState<WateringProfile | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<number | null>(null);
   
   const loadProfiles = async () => {
     try {
@@ -54,6 +56,7 @@ export default function WateringProfiles({ deviceId }: WateringProfilesProps) {
       await api.deleteWateringProfile(profileId);
       toast.success('Profile deleted successfully');
       loadProfiles();
+      setShowDeleteConfirm(null);
     } catch (error) {
       console.error('Error deleting profile:', error);
       toast.error('Failed to delete profile');
@@ -98,88 +101,85 @@ export default function WateringProfiles({ deviceId }: WateringProfilesProps) {
           <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full"></div>
         </div>
       ) : profiles.length === 0 ? (
-        <Card>
-          <CardContent className="py-8 text-center">
+        <div className="border rounded-lg shadow-sm">
+          <div className="py-8 text-center">
             <p className="text-muted-foreground">No watering profiles found. Create your first profile to customize watering behaviors.</p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {profiles.map((profile) => (
-            <Card key={profile.id} className={profile.is_default ? 'border-2 border-blue-500' : ''}>
-              <CardHeader className="pb-2">
+            <div 
+              key={profile.id} 
+              className={`border rounded-lg shadow-sm overflow-hidden ${profile.is_default ? 'border-2 border-blue-500' : ''}`}
+            >
+              <div className="p-4 border-b">
                 <div className="flex justify-between items-start">
                   <div>
-                    <CardTitle className="flex items-center">
+                    <h3 className="font-medium flex items-center">
                       {profile.name}
                       {profile.is_default && (
-                        <Badge variant="default" className="ml-2 bg-blue-500">Default</Badge>
+                        <span className="ml-2 text-xs bg-blue-500 text-white px-2 py-0.5 rounded-full">Default</span>
                       )}
-                    </CardTitle>
+                    </h3>
                     <p className="text-xs text-muted-foreground mt-1">
                       Updated {formatDistanceToNow(new Date(profile.updated_at), { addSuffix: true })}
                     </p>
                   </div>
                   <div className="flex space-x-1">
                     {!profile.is_default && (
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              onClick={() => handleSetDefault(profile.id)}
-                            >
-                              <Check className="h-4 w-4" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>Set as default</TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
+                      <button
+                        className="p-1 rounded-md hover:bg-gray-100"
+                        title="Set as default"
+                        onClick={() => handleSetDefault(profile.id)}
+                      >
+                        <Check className="h-4 w-4" />
+                      </button>
                     )}
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            onClick={() => handleEditProfile(profile)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Edit profile</TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
+                    <button
+                      className="p-1 rounded-md hover:bg-gray-100"
+                      title="Edit profile"
+                      onClick={() => handleEditProfile(profile)}
+                    >
+                      <Edit className="h-4 w-4" />
+                    </button>
                     
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Delete Profile</AlertDialogTitle>
-                          <AlertDialogDescription>
+                    <button
+                      className="p-1 rounded-md hover:bg-gray-100"
+                      title="Delete profile"
+                      onClick={() => setShowDeleteConfirm(profile.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                    
+                    {showDeleteConfirm === profile.id && (
+                      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                        <div className="bg-white p-6 rounded-lg max-w-md w-full">
+                          <h3 className="text-lg font-medium">Delete Profile</h3>
+                          <p className="my-2">
                             Are you sure you want to delete the "{profile.name}" profile? This action cannot be undone.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction 
-                            onClick={() => handleDeleteProfile(profile.id)}
-                            className="bg-red-500 hover:bg-red-600"
-                          >
-                            Delete
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+                          </p>
+                          <div className="flex justify-end gap-2 mt-4">
+                            <button
+                              onClick={() => setShowDeleteConfirm(null)}
+                              className="px-4 py-2 border rounded-md"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={() => handleDeleteProfile(profile.id)}
+                              className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
-              </CardHeader>
-              <CardContent>
+              </div>
+              <div className="p-4">
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div className="flex items-center">
                     <Droplet className="h-4 w-4 mr-2 text-blue-500" />
@@ -214,8 +214,8 @@ export default function WateringProfiles({ deviceId }: WateringProfilesProps) {
                     </ul>
                   </div>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           ))}
         </div>
       )}
