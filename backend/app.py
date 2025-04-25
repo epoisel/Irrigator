@@ -145,6 +145,71 @@ def init_db():
     )
     ''')
     
+    # Create watering_profiles table
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS watering_profiles (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        device_id TEXT NOT NULL,
+        is_default INTEGER DEFAULT 0,
+        watering_duration INTEGER,
+        wicking_wait_time INTEGER,
+        max_daily_cycles INTEGER,
+        sensing_interval INTEGER,
+        reservoir_limit REAL,
+        reservoir_volume REAL,
+        max_watering_per_day REAL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+    ''')
+    
+    # Create zones table
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS zones (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        description TEXT,
+        device_id TEXT,
+        width REAL,
+        length REAL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+    ''')
+    
+    # Create plants table
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS plants (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        zone_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        species TEXT,
+        planting_date TEXT,
+        position_x REAL,
+        position_y REAL,
+        notes TEXT,
+        water_requirements TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(zone_id) REFERENCES zones(id) ON DELETE CASCADE
+    )
+    ''')
+    
+    # Create zone_history table
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS zone_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        zone_id INTEGER NOT NULL,
+        plant_id INTEGER,
+        event_type TEXT NOT NULL,
+        event_description TEXT,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(zone_id) REFERENCES zones(id) ON DELETE CASCADE,
+        FOREIGN KEY(plant_id) REFERENCES plants(id) ON DELETE SET NULL
+    )
+    ''')
+
     conn.commit()
     conn.close()
 
