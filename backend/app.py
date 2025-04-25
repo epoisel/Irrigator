@@ -9,6 +9,7 @@ from werkzeug.utils import secure_filename
 import logging
 from logging.handlers import RotatingFileHandler
 import math
+from datetime import datetime, timedelta
 
 
 app = Flask(__name__)
@@ -1833,6 +1834,41 @@ def set_default_profile(profile_id):
     except Exception as e:
         app.logger.error(f"Error setting default profile: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/valve/state', methods=['POST'])
+def update_valve_state():
+    data = request.json
+    device_id = data.get('device_id')
+    valve_state = data.get('state')
+    
+    # Get the current valve state from the database
+    cursor = get_db().cursor()
+    cursor.execute(
+        "SELECT state FROM valve_states WHERE device_id = ? ORDER BY timestamp DESC LIMIT 1",
+        (device_id,)
+    )
+    current_state = cursor.fetchone()
+    
+    # Only record if the state has changed
+    if current_state is None or current_state[0] != valve_state:
+        # Insert the new state
+        cursor.execute(
+            "INSERT INTO valve_states (device_id, state, timestamp) VALUES (?, ?, ?)",
+            (device_id, valve_state, datetime.now().isoformat())
+        )
+        
+        # Purge old records - keep only records from the last 30 days
+        retention_days = 30  # Adjust this number as needed
+        cutoff_date = (datetime.now() - timedelta(days=retention_days)).isoformat()
+        
+        cursor.execute(
+            "DELETE FROM valve_states WHERE device_id = ? AND timestamp < ?",
+            (device_id, cutoff_date)
+        )
+        
+        get_db().commit()
+        
+    return jsonify({"success": True})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False) 
