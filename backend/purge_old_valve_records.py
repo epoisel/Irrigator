@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import os
 
 # Configuration
-DATABASE_PATH = "your_database.db"  # Update with your actual database path
+DATABASE_PATH = os.path.join(os.path.dirname(__file__), 'irrigation.db')
 RETENTION_DAYS = 30  # How many days of valve state history to keep
 
 def purge_old_records():
